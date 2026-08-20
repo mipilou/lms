@@ -51,6 +51,10 @@ Ne publiez jamais `node_modules`, `.next`, `.netlify` ni un fichier `.env`. Le f
 7. Dans **Project configuration → Environment variables**, ajoutez `NEXT_PUBLIC_SITE_URL` avec l’URL HTTPS Netlify finale ou votre domaine personnalisé, puis relancez le déploiement.
 8. Dans **Identity → Users**, attribuez le rôle `admin` aux comptes administrateurs. Les nouveaux comptes reçoivent le rôle `learner`.
 
+### Si Netlify affiche `Invalid URL`
+
+Vérifiez que `NEXT_PUBLIC_SITE_URL` contient une URL complète, par exemple `https://votre-projet.netlify.app`, et non simplement `votre-projet.netlify.app`. La version 1.0.1 normalise aussi automatiquement cette valeur afin d’éviter qu’une omission de protocole bloque le build.
+
 Le mode de démonstration reste accessible hors Netlify avec les boutons **Espace apprenant** et **Espace admin**.
 
 ## Développement local
