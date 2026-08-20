@@ -1,24 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-function normalizeSiteUrl(value?: string) {
-  const candidate = value?.trim();
-  if (!candidate) return "http://localhost:3000";
-
-  const urlWithProtocol = /^https?:\/\//i.test(candidate)
-    ? candidate
-    : `https://${candidate}`;
-
-  try {
-    return new URL(urlWithProtocol).origin;
-  } catch {
-    return "http://localhost:3000";
-  }
-}
-
-const siteUrl = normalizeSiteUrl(
-  process.env.NEXT_PUBLIC_SITE_URL ?? process.env.URL,
-);
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.URL ??
+  "http://localhost:3000").replace(/\/$/, "");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
