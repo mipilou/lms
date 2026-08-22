@@ -4,15 +4,40 @@
   "threshold": 80,
   "questions": [
     {
+      "type": "single",
       "prompt": "Quelle pratique est recommandée dans cette situation ?",
-      "options": [
-        "Réponse A",
-        "Réponse B",
-        "Réponse C",
-        "Réponse D"
-      ],
-      "correct": 1,
-      "explanation": "Expliquez ici pourquoi la réponse B est correcte."
+      "options": ["Réponse A", "Réponse B", "Réponse C", "Réponse D"],
+      "correctAnswers": [1],
+      "acceptedAnswers": [],
+      "explanation": "Expliquez ici pourquoi la réponse B est correcte.",
+      "points": 1
+    },
+    {
+      "type": "multiple",
+      "prompt": "Quels éléments doivent être vérifiés ?",
+      "options": ["Élément A", "Élément B", "Élément C", "Élément D"],
+      "correctAnswers": [0, 2],
+      "acceptedAnswers": [],
+      "explanation": "Les éléments A et C sont tous les deux indispensables.",
+      "points": 2
+    },
+    {
+      "type": "true_false",
+      "prompt": "Cette affirmation est-elle exacte ?",
+      "options": ["Vrai", "Faux"],
+      "correctAnswers": [0],
+      "acceptedAnswers": [],
+      "explanation": "L’affirmation est exacte dans le contexte présenté.",
+      "points": 1
+    },
+    {
+      "type": "short_text",
+      "prompt": "Quel geste doit être réalisé en priorité ?",
+      "options": [],
+      "correctAnswers": [],
+      "acceptedAnswers": ["friction hydroalcoolique", "friction avec une solution hydroalcoolique"],
+      "explanation": "Plusieurs formulations équivalentes peuvent être acceptées.",
+      "points": 2
     }
   ]
 }

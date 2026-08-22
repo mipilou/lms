@@ -14,10 +14,10 @@ Application de gestion de la formation conçue pour Walyah Académie : authentif
 - historique des assignations, modules, scores, certificats et connexions ;
 - 144 formations structurées issues des deux catalogues 2026 transmis ;
 - 6 parcours déjà scénarisés avec modules pédagogiques ;
-- création de formations, liens vidéo, dépôt de PDF/DOCX/PPTX/MP4 et QCM ;
+- studio guidé de préparation depuis le catalogue, modules réordonnables, liens vidéo/audio/web et dépôt segmenté compatible Netlify de PDF/DOCX/PPTX/MP4/WebM/audio/SCORM ;
 - stockage relationnel dans Netlify Database et fichiers dans Netlify Blobs ;
 - API HMAC bidirectionnelle pour le Passeport de formation ;
-- éditeur multi-question et import QCM JSON documenté dans `docs/FORMAT-QCM.md` ;
+- éditeur de questions à choix unique, choix multiples, vrai/faux et réponse courte, avec imports QCM JSON et Excel documentés dans `docs/FORMAT-QCM.md` ;
 - interface responsive, recherche, filtres, exports CSV et journal d’activité.
 
 ## Déploiement

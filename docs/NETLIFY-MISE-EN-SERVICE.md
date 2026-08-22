@@ -30,8 +30,9 @@ Dans **Data & Storage → Database**, créez la base du projet si Netlify ne l�
 
 - `20260820000100_create_lms_schema.sql` crée le cœur du LMS ;
 - `20260820000200_expand_lms_governance.sql` ajoute la gouvernance, les certificats et le passeport ;
-- `20260820000300_seed_2026_catalogues.sql` importe les 144 formations.
-- `20260822000100_remove_automatic_enrollments.sql` supprime les anciennes affectations automatiques et trace la source des nouvelles affectations.
+- `20260820000300_seed_2026_catalogues.sql` importe les 144 formations ;
+- `20260822000100_remove_automatic_enrollments.sql` supprime les anciennes affectations automatiques et trace la source des nouvelles affectations ;
+- `20260822000200_content_studio_scorm_quizzes.sql` ajoute le studio de contenus, les métadonnées SCORM et les QCM enrichis.
 
 Netlify détecte ce dossier et applique les migrations juste avant la publication. Si une migration échoue, le déploiement n’est pas publié : corrigez la migration, créez-en une nouvelle et relancez le déploiement. Ne modifiez pas une migration déjà appliquée en production.
 
@@ -88,9 +89,9 @@ Après modification d’une variable, relancez un déploiement.
 
 ## 7. Fichiers pédagogiques
 
-Les imports PDF, DOCX, PPTX et MP4 passent par `/.netlify/functions/upload`. Les fichiers sont validés, limités à 50 Mo et stockés dans Netlify Blobs, store `walyah-lms-content`. Les métadonnées sont enregistrées dans `resources`.
+Les imports PDF, Word, PowerPoint, MP4/WebM, MP3/WAV/M4A/OGG/AAC et SCORM ZIP passent par `/.netlify/functions/upload`. Les fichiers sont validés, limités à 50 Mo et stockés dans Netlify Blobs, store `walyah-lms-content`. Le navigateur les envoie automatiquement par blocs de 3 Mo pour rester sous la limite des requêtes binaires des fonctions Netlify. Pour SCORM, le manifeste et l’intégrité du ZIP sont contrôlés après reconstitution. Les métadonnées sont enregistrées dans `resources`.
 
-Les photos JPG, PNG et WebP sont limitées à 5 Mo et stockées séparément dans le store privé `walyah-lms-avatars`. Un apprenant modifie uniquement sa propre photo ; les administrateurs peuvent la consulter depuis sa fiche.
+Les photos JPG, PNG et WebP sont limitées à 4 Mo et stockées séparément dans le store privé `walyah-lms-avatars`. Un apprenant modifie uniquement sa propre photo ; les administrateurs peuvent la consulter depuis sa fiche.
 
 ## 8. Vérifications après publication
 
@@ -115,7 +116,7 @@ Vérifiez en priorité :
 - `package.json` et `package-lock.json` sont tous deux présents ;
 - la version de Node respecte `package.json` (`>=22.13.0`) ;
 - aucun secret n’est importé côté navigateur ;
-- les quatre migrations portent des noms uniques et ordonnés ;
+- les cinq migrations portent des noms uniques et ordonnés ;
 - `NEXT_PUBLIC_SITE_URL` contient une URL HTTPS valide.
 
 ## Documentation officielle utile

@@ -6,12 +6,12 @@ export type Accent = "teal" | "blue" | "violet" | "amber" | "coral";
 export type ModuleContent = {
   id?: string;
   title: string;
-  type: "video" | "lesson" | "case" | "document" | "quiz";
+  type: "video" | "lesson" | "case" | "document" | "audio" | "scorm" | "quiz";
   duration: string;
   summary: string;
   points: string[];
   videoUrl?: string;
-  resources?: Array<{ name: string; type: string; url?: string }>;
+  resources?: Array<{ id?: string; name: string; type: string; contentKind?: string; url?: string; sizeBytes?: number; metadata?: Record<string, unknown> }>;
 };
 
 export type Course = {

@@ -17,6 +17,26 @@ function certificateNumber() {
   return `WAL-${stamp}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 }
 
+function normalizedAnswer(value: unknown) {
+  return String(value ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+function numberArray(value: unknown) {
+  if (!Array.isArray(value)) return Number.isInteger(Number(value)) ? [Number(value)] : [];
+  return Array.from(new Set(value.map(Number).filter((item) => Number.isInteger(item) && item >= 0)));
+}
+
+function jsonArray<T = unknown>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
+  }
+}
+
 const handler = async (request: Request) => {
   const identityUser = await getUser();
   if (!identityUser) return json({ error: "Authentification requise" }, 401);
@@ -30,8 +50,43 @@ const handler = async (request: Request) => {
     const url = new URL(request.url);
     const scope = url.searchParams.get("scope") ?? "dashboard";
 
-    if (["admin", "catalog", "learner"].includes(scope) && !isStaff) {
+    if (["admin", "catalog", "learner", "course-studio"].includes(scope) && !isStaff) {
       return json({ error: "Accès administrateur requis" }, 403);
+    }
+
+    if (scope === "course-studio") {
+      const courseId = url.searchParams.get("courseId") ?? "";
+      if (!courseId) return json({ error: "courseId requis" }, 400);
+      const [courseRows, moduleRows, quizRows] = await Promise.all([
+        db.sql`SELECT * FROM courses WHERE id = ${courseId} LIMIT 1`,
+        db.sql`
+          SELECT m.*,
+                 COALESCE((
+                   SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
+                     'id', r.id,
+                     'name', r.name,
+                     'resource_type', r.resource_type,
+                     'content_kind', r.content_kind,
+                     'mime_type', r.mime_type,
+                     'size_bytes', r.size_bytes,
+                     'metadata', r.metadata,
+                     'external_url', CASE WHEN r.resource_type = 'file' THEN '/.netlify/functions/upload?resourceId=' || r.id ELSE r.external_url END
+                   ) ORDER BY r.created_at)
+                   FROM resources r WHERE r.module_id = m.id
+                 ), '[]'::JSONB) AS resources
+          FROM modules m
+          WHERE m.course_id = ${courseId}
+          ORDER BY m.position
+        `,
+        db.sql`
+          SELECT q.id, q.title, q.pass_threshold, q.published, COUNT(qq.id)::INT AS question_count
+          FROM quizzes q LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
+          WHERE q.course_id = ${courseId}
+          GROUP BY q.id ORDER BY q.created_at DESC
+        `,
+      ]);
+      if (!courseRows[0]) return json({ error: "Formation introuvable" }, 404);
+      return json({ course: courseRows[0], modules: moduleRows, quizzes: quizRows });
     }
 
     if (scope === "admin") {
@@ -105,7 +160,7 @@ const handler = async (request: Request) => {
                      'duration_minutes', m.duration_minutes,
                      'learning_objectives', m.learning_objectives,
                      'video_url', m.video_url,
-                     'resources', COALESCE((SELECT JSONB_AGG(JSONB_BUILD_OBJECT('name', r.name, 'resource_type', r.resource_type, 'external_url', CASE WHEN r.resource_type = 'file' THEN '/.netlify/functions/upload?resourceId=' || r.id ELSE r.external_url END) ORDER BY r.created_at) FROM resources r WHERE r.module_id = m.id), '[]'::JSONB)
+                     'resources', COALESCE((SELECT JSONB_AGG(JSONB_BUILD_OBJECT('id', r.id, 'name', r.name, 'resource_type', r.resource_type, 'content_kind', r.content_kind, 'mime_type', r.mime_type, 'size_bytes', r.size_bytes, 'metadata', r.metadata, 'external_url', CASE WHEN r.resource_type = 'file' THEN '/.netlify/functions/upload?resourceId=' || r.id ELSE r.external_url END) ORDER BY r.created_at) FROM resources r WHERE r.module_id = m.id), '[]'::JSONB)
                    ) ORDER BY m.position)
                    FROM modules m WHERE m.course_id = c.id AND m.published = TRUE
                  ), '[]'::JSONB) AS module_content
@@ -206,7 +261,7 @@ const handler = async (request: Request) => {
                    'duration_minutes', m.duration_minutes,
                    'learning_objectives', m.learning_objectives,
                    'video_url', m.video_url,
-                   'resources', COALESCE((SELECT JSONB_AGG(JSONB_BUILD_OBJECT('name', r.name, 'resource_type', r.resource_type, 'external_url', CASE WHEN r.resource_type = 'file' THEN '/.netlify/functions/upload?resourceId=' || r.id ELSE r.external_url END) ORDER BY r.created_at) FROM resources r WHERE r.module_id = m.id), '[]'::JSONB)
+                   'resources', COALESCE((SELECT JSONB_AGG(JSONB_BUILD_OBJECT('id', r.id, 'name', r.name, 'resource_type', r.resource_type, 'content_kind', r.content_kind, 'mime_type', r.mime_type, 'size_bytes', r.size_bytes, 'metadata', r.metadata, 'external_url', CASE WHEN r.resource_type = 'file' THEN '/.netlify/functions/upload?resourceId=' || r.id ELSE r.external_url END) ORDER BY r.created_at) FROM resources r WHERE r.module_id = m.id), '[]'::JSONB)
                  ) ORDER BY m.position)
                  FROM modules m WHERE m.course_id = c.id AND m.published = TRUE
                ), '[]'::JSONB) AS module_content
@@ -291,10 +346,31 @@ const handler = async (request: Request) => {
       LIMIT 1
     `;
     if (!quiz[0]) return json({ error: "QCM introuvable" }, 404);
-    const questions = await db.sql<{ correct_option: number }>`SELECT correct_option FROM quiz_questions WHERE quiz_id = ${quizId} ORDER BY position`;
+    const questions = await db.sql<{ id: string; question_type: string; correct_option: number; correct_answers: unknown; accepted_answers: unknown; points: number }>`
+      SELECT id, question_type, correct_option, correct_answers, accepted_answers, points
+      FROM quiz_questions WHERE quiz_id = ${quizId} ORDER BY position
+    `;
     if (!questions.length) return json({ error: "Ce QCM ne contient aucune question" }, 400);
-    const correctAnswers = questions.reduce((total, question, index) => total + (Number(answers[String(index)]) === question.correct_option ? 1 : 0), 0);
-    const score = Math.round((correctAnswers / questions.length) * 100);
+    let earnedPoints = 0;
+    let availablePoints = 0;
+    questions.forEach((question, index) => {
+      const points = Math.max(1, Number(question.points ?? 1));
+      const submitted = answers[question.id] ?? answers[String(index)];
+      const expectedIndexes = numberArray(jsonArray(question.correct_answers).length ? jsonArray(question.correct_answers) : [question.correct_option]).sort((a, b) => a - b);
+      let isCorrect = false;
+      if (question.question_type === "short_text") {
+        const accepted = jsonArray<string>(question.accepted_answers).map(normalizedAnswer);
+        isCorrect = accepted.includes(normalizedAnswer(submitted));
+      } else if (question.question_type === "multiple") {
+        const submittedIndexes = numberArray(submitted).sort((a, b) => a - b);
+        isCorrect = submittedIndexes.length === expectedIndexes.length && submittedIndexes.every((value, itemIndex) => value === expectedIndexes[itemIndex]);
+      } else {
+        isCorrect = Number(submitted) === expectedIndexes[0];
+      }
+      availablePoints += points;
+      if (isCorrect) earnedPoints += points;
+    });
+    const score = Math.round((earnedPoints / Math.max(availablePoints, 1)) * 100);
     const passed = score >= quiz[0].pass_threshold;
     const attemptId = crypto.randomUUID();
     await db.sql`
@@ -318,6 +394,125 @@ const handler = async (request: Request) => {
   }
 
   if (!isStaff) return json({ error: "Accès administrateur requis" }, 403);
+
+  if (action === "prepare-catalog-course") {
+    const courseId = String(body.courseId ?? "");
+    if (!courseId) return json({ error: "courseId requis" }, 400);
+    const existing = await db.sql<{ id: string; title: string; description: string; lifecycle_status: string }>`
+      SELECT id, title, description, lifecycle_status FROM courses WHERE id = ${courseId} LIMIT 1
+    `;
+    if (!existing[0]) return json({ error: "Formation du catalogue introuvable" }, 404);
+    if (existing[0].lifecycle_status === "archived") return json({ error: "Cette formation est archivée" }, 409);
+    await db.sql`
+      UPDATE courses SET lifecycle_status = CASE WHEN lifecycle_status = 'catalog' THEN 'draft' ELSE lifecycle_status END,
+        published = CASE WHEN lifecycle_status = 'catalog' THEN FALSE ELSE published END,
+        created_by = COALESCE(created_by, ${user.id}), updated_at = NOW()
+      WHERE id = ${courseId}
+    `;
+    const modules = await db.sql<{ id: string }>`SELECT id FROM modules WHERE course_id = ${courseId} ORDER BY position LIMIT 1`;
+    let moduleId = modules[0]?.id;
+    if (!moduleId) {
+      moduleId = `${courseId}-module-1`;
+      await db.sql`
+        INSERT INTO modules (id, course_id, position, title, description, content_type, duration_minutes, learning_objectives, lesson_content, published)
+        VALUES (${moduleId}, ${courseId}, 1, 'Introduction et objectifs', ${existing[0].description ?? ""}, 'text', 15, '[]'::JSONB, ${JSON.stringify({ status: "draft" })}, TRUE)
+      `;
+    }
+    if (existing[0].lifecycle_status === "catalog") {
+      await db.sql`
+        INSERT INTO activity_events (id, actor_id, event_type, entity_type, entity_id, summary)
+        VALUES (${crypto.randomUUID()}, ${user.id}, 'course.prepared', 'course', ${courseId}, 'Parcours préparé depuis le catalogue')
+      `;
+    }
+    return json({ ok: true, id: courseId, moduleId });
+  }
+
+  if (action === "save-course") {
+    const courseId = String(body.courseId ?? "");
+    const title = String(body.title ?? "").trim();
+    if (!courseId || !title) return json({ error: "Formation et titre requis" }, 400);
+    const durationMinutes = Math.max(0, Math.round(Number(body.durationMinutes ?? 0)));
+    const rows = await db.sql<{ id: string }>`SELECT id FROM courses WHERE id = ${courseId} AND lifecycle_status <> 'catalog' LIMIT 1`;
+    if (!rows[0]) return json({ error: "Préparez d’abord cette formation depuis le catalogue" }, 409);
+    await db.sql`
+      UPDATE courses SET title = ${title}, category = ${String(body.category ?? "Formation")},
+        description = ${String(body.description ?? "")}, objective = ${String(body.objective ?? body.description ?? "")},
+        audience = ${String(body.audience ?? "")}, duration_minutes = ${durationMinutes},
+        mandatory = ${Boolean(body.mandatory)}, updated_at = NOW()
+      WHERE id = ${courseId}
+    `;
+    return json({ ok: true });
+  }
+
+  if (action === "save-module") {
+    const courseId = String(body.courseId ?? "");
+    const requestedId = String(body.moduleId ?? "");
+    const title = String(body.title ?? "").trim();
+    const contentType = String(body.contentType ?? "text");
+    const allowedContentTypes = new Set(["text", "video", "document", "audio", "scorm", "quiz"]);
+    if (!courseId || !title) return json({ error: "Formation et titre du module requis" }, 400);
+    if (!allowedContentTypes.has(contentType)) return json({ error: "Type de module invalide" }, 400);
+    const courseRows = await db.sql<{ id: string }>`SELECT id FROM courses WHERE id = ${courseId} AND lifecycle_status <> 'catalog' LIMIT 1`;
+    if (!courseRows[0]) return json({ error: "Formation en préparation introuvable" }, 404);
+    const objectives = Array.isArray(body.objectives) ? body.objectives.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 20) : [];
+    const durationMinutes = Math.max(0, Math.round(Number(body.durationMinutes ?? 0)));
+    const position = Math.max(1, Math.round(Number(body.position ?? 1)));
+    let moduleId = requestedId;
+    if (moduleId) {
+      const moduleRows = await db.sql<{ id: string }>`SELECT id FROM modules WHERE id = ${moduleId} AND course_id = ${courseId} LIMIT 1`;
+      if (!moduleRows[0]) return json({ error: "Module introuvable dans ce parcours" }, 404);
+      await db.sql`
+        UPDATE modules SET position = ${position}, title = ${title}, description = ${String(body.description ?? "")},
+          content_type = ${contentType}, body = ${String(body.body ?? "")}, duration_minutes = ${durationMinutes},
+          learning_objectives = ${JSON.stringify(objectives)}, published = ${body.published !== false}, updated_at = NOW()
+        WHERE id = ${moduleId} AND course_id = ${courseId}
+      `;
+    } else {
+      moduleId = crypto.randomUUID();
+      await db.sql`
+        INSERT INTO modules (id, course_id, position, title, description, content_type, body, duration_minutes, learning_objectives, lesson_content, published)
+        VALUES (${moduleId}, ${courseId}, ${position}, ${title}, ${String(body.description ?? "")}, ${contentType}, ${String(body.body ?? "")}, ${durationMinutes}, ${JSON.stringify(objectives)}, ${JSON.stringify({ status: "draft" })}, ${body.published !== false})
+      `;
+    }
+    await db.sql`UPDATE courses SET updated_at = NOW() WHERE id = ${courseId}`;
+    return json({ ok: true, id: moduleId }, requestedId ? 200 : 201);
+  }
+
+  if (action === "add-resource-link" || action === "add-video-link") {
+    const moduleId = String(body.moduleId ?? "");
+    const externalUrl = String(body.url ?? "");
+    const name = String(body.name ?? "Ressource externe").trim() || "Ressource externe";
+    const requestedKind = action === "add-video-link" ? "video" : String(body.contentKind ?? "external");
+    const contentKind = ["video", "audio", "external"].includes(requestedKind) ? requestedKind : "external";
+    let parsed: URL;
+    try { parsed = new URL(externalUrl); } catch { return json({ error: "Adresse du lien invalide" }, 400); }
+    if (parsed.protocol !== "https:") return json({ error: "Une adresse HTTPS est requise" }, 400);
+    const moduleRows = await db.sql<{ id: string }>`SELECT id FROM modules WHERE id = ${moduleId} LIMIT 1`;
+    if (!moduleRows[0]) return json({ error: "Module introuvable" }, 404);
+    const resourceId = crypto.randomUUID();
+    if (contentKind === "video") await db.sql`UPDATE modules SET content_type = 'video', video_url = ${externalUrl}, updated_at = NOW() WHERE id = ${moduleId}`;
+    await db.sql`
+      INSERT INTO resources (id, module_id, name, resource_type, content_kind, external_url, uploaded_by)
+      VALUES (${resourceId}, ${moduleId}, ${name}, 'link', ${contentKind}, ${externalUrl}, ${user.id})
+    `;
+    return json({ ok: true, resource: { id: resourceId, name, resource_type: "link", content_kind: contentKind, external_url: externalUrl } }, 201);
+  }
+
+  if (action === "publish-course") {
+    const courseId = String(body.courseId ?? "");
+    const [courseRows, moduleCount] = await Promise.all([
+      db.sql<{ id: string }>`SELECT id FROM courses WHERE id = ${courseId} AND lifecycle_status <> 'catalog' LIMIT 1`,
+      db.sql<{ count: number }>`SELECT COUNT(*)::INT AS count FROM modules WHERE course_id = ${courseId} AND published = TRUE`,
+    ]);
+    if (!courseRows[0]) return json({ error: "Formation en préparation introuvable" }, 404);
+    if (!Number(moduleCount[0]?.count ?? 0)) return json({ error: "Ajoutez au moins un module avant la publication" }, 409);
+    await db.sql`UPDATE courses SET published = TRUE, lifecycle_status = 'published', updated_at = NOW() WHERE id = ${courseId}`;
+    await db.sql`
+      INSERT INTO activity_events (id, actor_id, event_type, entity_type, entity_id, summary)
+      VALUES (${crypto.randomUUID()}, ${user.id}, 'course.published', 'course', ${courseId}, 'Formation publiée')
+    `;
+    return json({ ok: true });
+  }
 
   if (action === "request-passport-sync") {
     const userId = String(body.userId ?? "");
@@ -352,23 +547,6 @@ const handler = async (request: Request) => {
     return json({ ok: true, id, code }, 201);
   }
 
-  if (action === "add-video-link") {
-    const moduleId = String(body.moduleId ?? "");
-    const externalUrl = String(body.url ?? "");
-    const name = String(body.name ?? "Vidéo du module");
-    let parsed: URL;
-    try { parsed = new URL(externalUrl); } catch { return json({ error: "URL vidéo invalide" }, 400); }
-    if (!['https:'].includes(parsed.protocol)) return json({ error: "Une URL HTTPS est requise" }, 400);
-    const moduleRows = await db.sql`SELECT id FROM modules WHERE id = ${moduleId} LIMIT 1`;
-    if (!moduleRows[0]) return json({ error: "Module introuvable" }, 404);
-    await db.sql`UPDATE modules SET content_type = 'video', video_url = ${externalUrl}, updated_at = NOW() WHERE id = ${moduleId}`;
-    await db.sql`
-      INSERT INTO resources (id, module_id, name, resource_type, external_url, uploaded_by)
-      VALUES (${crypto.randomUUID()}, ${moduleId}, ${name}, 'link', ${externalUrl}, ${user.id})
-    `;
-    return json({ ok: true });
-  }
-
   if (action === "assign-course") {
     const userId = String(body.userId ?? "");
     const courseId = String(body.courseId ?? "");
@@ -399,25 +577,46 @@ const handler = async (request: Request) => {
   if (action === "create-quiz") {
     const id = crypto.randomUUID();
     const courseId = String(body.courseId ?? "hygiene-mains");
-    const title = String(body.title ?? "Évaluation finale");
-    const threshold = Number(body.threshold ?? 80);
+    const title = String(body.title ?? "Évaluation finale").trim();
+    const threshold = Math.round(Number(body.threshold ?? 80));
     const submittedQuestions = Array.isArray(body.questions) ? body.questions : [{ prompt: body.question, options: body.options, correct: body.correct, explanation: "" }];
+    if (!title) return json({ error: "Titre du QCM requis" }, 400);
+    if (threshold < 0 || threshold > 100) return json({ error: "Le seuil doit être compris entre 0 et 100 %" }, 400);
     if (!submittedQuestions.length || submittedQuestions.length > 100) return json({ error: "Le QCM doit contenir entre 1 et 100 questions" }, 400);
-    const normalizedQuestions: Array<{ prompt: string; options: string[]; correct: number; explanation: string }> = [];
+    const courseRows = await db.sql<{ id: string }>`SELECT id FROM courses WHERE id = ${courseId} AND lifecycle_status <> 'catalog' LIMIT 1`;
+    if (!courseRows[0]) return json({ error: "Formation introuvable ou encore au stade catalogue" }, 404);
+    const allowedQuestionTypes = new Set(["single", "multiple", "true_false", "short_text"]);
+    const normalizedQuestions: Array<{ type: string; prompt: string; options: string[]; correctAnswers: number[]; acceptedAnswers: string[]; explanation: string; points: number }> = [];
     for (const [index, raw] of submittedQuestions.entries()) {
       const question = raw as Record<string, unknown>;
+      const type = String(question.type ?? question.questionType ?? "single");
       const prompt = String(question.prompt ?? "").trim();
-      const options = Array.isArray(question.options) ? question.options.map(String).slice(0, 6) : [];
-      const correct = Number(question.correct ?? 0);
+      let options = Array.isArray(question.options) ? question.options.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 6) : [];
+      if (type === "true_false") options = ["Vrai", "Faux"];
+      if (type === "short_text") options = [];
+      const correctAnswers = type === "short_text" ? [] : numberArray(question.correctAnswers ?? question.correct_answers ?? question.correct);
+      const rawAcceptedAnswers = question.acceptedAnswers ?? question.accepted_answers;
+      const acceptedAnswers = type === "short_text" && Array.isArray(rawAcceptedAnswers)
+        ? rawAcceptedAnswers.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 20)
+        : [];
       const explanation = String(question.explanation ?? "");
-      if (!prompt || options.length < 2 || correct < 0 || correct >= options.length) return json({ error: `Question ${index + 1} invalide` }, 400);
-      normalizedQuestions.push({ prompt, options, correct, explanation });
+      const points = Math.round(Number(question.points ?? 1));
+      if (!allowedQuestionTypes.has(type)) return json({ error: `Question ${index + 1} : type invalide` }, 400);
+      if (!prompt) return json({ error: `Question ${index + 1} : intitulé requis` }, 400);
+      if ((type === "single" || type === "multiple") && (options.length < 2 || options.length > 6)) return json({ error: `Question ${index + 1} : 2 à 6 réponses sont requises` }, 400);
+      if (type === "single" && correctAnswers.length !== 1) return json({ error: `Question ${index + 1} : une seule bonne réponse est requise` }, 400);
+      if (type === "multiple" && !correctAnswers.length) return json({ error: `Question ${index + 1} : sélectionnez au moins une bonne réponse` }, 400);
+      if (type === "true_false" && (correctAnswers.length !== 1 || correctAnswers[0] > 1)) return json({ error: `Question ${index + 1} : choisissez Vrai ou Faux` }, 400);
+      if (correctAnswers.some((answer) => answer >= options.length)) return json({ error: `Question ${index + 1} : index de bonne réponse invalide` }, 400);
+      if (type === "short_text" && !acceptedAnswers.length) return json({ error: `Question ${index + 1} : réponse acceptée requise` }, 400);
+      if (points < 1 || points > 10) return json({ error: `Question ${index + 1} : points entre 1 et 10 requis` }, 400);
+      normalizedQuestions.push({ type, prompt, options, correctAnswers, acceptedAnswers, explanation, points });
     }
     await db.sql`INSERT INTO quizzes (id, course_id, title, pass_threshold, published) VALUES (${id}, ${courseId}, ${title}, ${threshold}, FALSE)`;
     for (const [index, question] of normalizedQuestions.entries()) {
       await db.sql`
-        INSERT INTO quiz_questions (id, quiz_id, position, prompt, options, correct_option, explanation)
-        VALUES (${crypto.randomUUID()}, ${id}, ${index + 1}, ${question.prompt}, ${JSON.stringify(question.options)}, ${question.correct}, ${question.explanation})
+        INSERT INTO quiz_questions (id, quiz_id, position, prompt, options, correct_option, question_type, correct_answers, accepted_answers, explanation, points)
+        VALUES (${crypto.randomUUID()}, ${id}, ${index + 1}, ${question.prompt}, ${JSON.stringify(question.options)}, ${question.correctAnswers[0] ?? 0}, ${question.type}, ${JSON.stringify(question.correctAnswers)}, ${JSON.stringify(question.acceptedAnswers)}, ${question.explanation}, ${question.points})
       `;
     }
     return json({ ok: true, id, questionCount: normalizedQuestions.length }, 201);
