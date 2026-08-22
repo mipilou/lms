@@ -10,6 +10,7 @@ const allowedTypes = new Set([
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "video/mp4",
 ]);
+const allowedAvatarTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const handler = async (request: Request) => {
   const identityUser = await getUser();
@@ -19,7 +20,25 @@ const handler = async (request: Request) => {
   const isStaff = roles.includes("admin") || roles.includes("super_admin");
 
   if (request.method === "GET") {
-    const resourceId = new URL(request.url).searchParams.get("resourceId") ?? "";
+    const url = new URL(request.url);
+    const avatarId = url.searchParams.get("avatar") ?? "";
+    if (avatarId) {
+      const targetUserId = avatarId === "me" ? user.id : avatarId;
+      if (!isStaff && targetUserId !== user.id) return Response.json({ error: "Accès à cette photo refusé" }, { status: 403 });
+      const db = getDatabase();
+      const rows = await db.sql`
+        SELECT profile_metadata->>'avatar_storage_key' AS storage_key,
+               profile_metadata->>'avatar_mime_type' AS mime_type
+        FROM users WHERE id = ${targetUserId} LIMIT 1
+      `;
+      const avatar = rows[0];
+      if (!avatar?.storage_key) return Response.json({ error: "Photo de profil introuvable" }, { status: 404 });
+      const avatarStore = getStore("walyah-lms-avatars");
+      const stream = await avatarStore.get(String(avatar.storage_key), { type: "stream" });
+      if (!stream) return Response.json({ error: "Photo de profil introuvable" }, { status: 404 });
+      return new Response(stream, { headers: { "Content-Type": String(avatar.mime_type ?? "image/jpeg"), "Content-Disposition": "inline", "Cache-Control": "private, max-age=300" } });
+    }
+    const resourceId = url.searchParams.get("resourceId") ?? "";
     if (!resourceId) return Response.json({ error: "resourceId requis" }, { status: 400 });
     const db = getDatabase();
     const resources = isStaff ? await db.sql`
@@ -43,12 +62,28 @@ const handler = async (request: Request) => {
 
   if (request.method !== "POST") return Response.json({ error: "Méthode non autorisée" }, { status: 405 });
   verifyRequestOrigin(request);
-  if (!isStaff) return Response.json({ error: "Accès administrateur requis" }, { status: 403 });
-
   const form = await request.formData();
   const file = form.get("file");
-  const moduleId = String(form.get("moduleId") ?? "");
+  const purpose = String(form.get("purpose") ?? "resource");
   if (!(file instanceof File)) return Response.json({ error: "Fichier requis" }, { status: 400 });
+
+  if (purpose === "avatar") {
+    if (file.size > 5 * 1024 * 1024) return Response.json({ error: "La photo ne doit pas dépasser 5 Mo" }, { status: 413 });
+    if (!allowedAvatarTypes.has(file.type)) return Response.json({ error: "Format autorisé : JPG, PNG ou WebP" }, { status: 415 });
+    const storageKey = `${user.id}/avatar`;
+    const avatarStore = getStore("walyah-lms-avatars");
+    await avatarStore.set(storageKey, file, { metadata: { originalName: file.name, uploadedBy: user.id, purpose: "profile-avatar" } });
+    const db = getDatabase();
+    await db.sql`
+      UPDATE users SET profile_metadata = COALESCE(profile_metadata, '{}'::JSONB) ||
+        JSONB_BUILD_OBJECT('avatar_storage_key', ${storageKey}, 'avatar_mime_type', ${file.type}, 'avatar_updated_at', NOW()::TEXT)
+      WHERE id = ${user.id}
+    `;
+    return Response.json({ ok: true, avatarUrl: "/.netlify/functions/upload?avatar=me" }, { status: 201 });
+  }
+
+  if (!isStaff) return Response.json({ error: "Accès administrateur requis" }, { status: 403 });
+  const moduleId = String(form.get("moduleId") ?? "");
   if (file.size > 50 * 1024 * 1024) return Response.json({ error: "La taille maximale est de 50 Mo" }, { status: 413 });
   if (!allowedTypes.has(file.type)) return Response.json({ error: "Format de fichier non autorisé" }, { status: 415 });
 

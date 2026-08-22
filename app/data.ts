@@ -35,6 +35,7 @@ export type TrainingRecord = {
 
 export type Learner = {
   id: string; matricule: string; name: string; initials: string; email: string; phone: string;
+  avatarUrl?: string;
   department: string; jobTitle: string; manager: string; hireDate: string; location: string;
   progress: number; completed: number; assigned: number; lastLogin: string;
   lastLoginDetail: string; status: "Actif" | "À relancer" | "Inactif";

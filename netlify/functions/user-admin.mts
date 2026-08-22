@@ -56,8 +56,13 @@ const handler = async (request: Request) => {
     const userId = String(body.userId ?? "");
     const role = String(body.role ?? "");
     if (!userId || !["learner", "admin", "super_admin"].includes(role)) return json({ error: "Utilisateur ou rôle invalide" }, 400);
+    if (userId === current.id && role !== "super_admin") return json({ error: "Vous ne pouvez pas retirer votre propre rôle de super-administrateur." }, 409);
     const target = await admin.getUser(userId);
     const previousRole = target.roles?.includes("super_admin") ? "super_admin" : target.roles?.includes("admin") ? "admin" : "learner";
+    if (previousRole === "super_admin" && role !== "super_admin") {
+      const superAdmins = await db.sql<{ count: number }>`SELECT COUNT(*)::INT AS count FROM users WHERE role = 'super_admin'`;
+      if (Number(superAdmins[0]?.count ?? 0) <= 1) return json({ error: "Conservez au moins un super-administrateur actif." }, 409);
+    }
     await admin.updateUser(userId, { role, app_metadata: { ...target.appMetadata, roles: [role] } });
     await db.sql`UPDATE users SET role = ${role} WHERE id = ${userId}`;
     await db.sql`

@@ -35,7 +35,7 @@ const handler = async (request: Request) => {
     }
 
     if (scope === "admin") {
-      const [totals, learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats] = await Promise.all([
+      const [totals, learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats, accounts, roleAudit] = await Promise.all([
         db.sql`
           SELECT
             (SELECT COUNT(*)::INT FROM users WHERE role = 'learner') AS learners,
@@ -49,10 +49,16 @@ const handler = async (request: Request) => {
             (SELECT COUNT(*)::INT FROM enrollments WHERE status = 'assigned') AS assigned_enrollments,
             (SELECT COALESCE(ROUND(AVG(progress_percent)), 0)::INT FROM enrollments) AS completion_rate,
             (SELECT COUNT(*)::INT FROM users WHERE role = 'learner' AND (last_login_at IS NULL OR last_login_at < NOW() - INTERVAL '30 days')) AS inactive_users,
-            (SELECT COUNT(DISTINCT user_id)::INT FROM login_events WHERE occurred_at >= NOW() - INTERVAL '7 days') AS active_users_7d
+            (SELECT COUNT(DISTINCT user_id)::INT FROM login_events WHERE occurred_at >= NOW() - INTERVAL '7 days') AS active_users_7d,
+            (SELECT COUNT(*)::INT FROM users WHERE role = 'admin') AS admins,
+            (SELECT COUNT(*)::INT FROM users WHERE role = 'super_admin') AS super_admins,
+            (SELECT COUNT(*)::INT FROM passport_connections WHERE sync_status = 'connected') AS passport_connected,
+            (SELECT COUNT(*)::INT FROM integration_events WHERE status = 'pending') AS integrations_pending,
+            (SELECT COUNT(*)::INT FROM integration_events WHERE status = 'failed') AS integrations_failed
         `,
         db.sql`
           SELECT u.id, u.matricule, u.email, u.full_name, u.department, u.job_title, u.status, u.last_login_at,
+                 COALESCE(u.profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar,
                  COUNT(e.id)::INT AS assigned,
                  COUNT(e.id) FILTER (WHERE e.status = 'completed')::INT AS completed,
                  COALESCE(ROUND(AVG(e.progress_percent)), 0)::INT AS progress
@@ -121,8 +127,24 @@ const handler = async (request: Request) => {
           GROUP BY q.id, c.id
           ORDER BY q.created_at DESC
         `,
+        isSuperAdmin ? db.sql`
+          SELECT id, email, full_name, role, status, last_login_at
+          FROM users
+          ORDER BY CASE role WHEN 'super_admin' THEN 1 WHEN 'admin' THEN 2 ELSE 3 END, full_name
+          LIMIT 250
+        ` : Promise.resolve([]),
+        isSuperAdmin ? db.sql`
+          SELECT r.id, r.previous_role, r.new_role, r.occurred_at,
+                 COALESCE(actor.full_name, actor.email, 'Administration') AS actor_name,
+                 COALESCE(target.full_name, target.email, 'Utilisateur') AS target_name
+          FROM role_audit_events r
+          LEFT JOIN users actor ON actor.id = r.actor_id
+          LEFT JOIN users target ON target.id = r.target_user_id
+          ORDER BY r.occurred_at DESC
+          LIMIT 30
+        ` : Promise.resolve([]),
       ]);
-      return json({ totals: totals[0], learners: learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats, role: isSuperAdmin ? "super_admin" : "admin" });
+      return json({ totals: totals[0], learners: learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats, accounts, roleAudit, role: isSuperAdmin ? "super_admin" : "admin" });
     }
 
     if (scope === "catalog") {
@@ -139,7 +161,7 @@ const handler = async (request: Request) => {
       const learnerId = url.searchParams.get("id");
       if (!learnerId) return json({ error: "id apprenant requis" }, 400);
       const [profile, enrollments, attempts, certificates, logins, activity, passport] = await Promise.all([
-        db.sql`SELECT id, matricule, email, full_name, role, department, phone, job_title, manager_name, hire_date, location, status, created_at, last_login_at FROM users WHERE id = ${learnerId} LIMIT 1`,
+        db.sql`SELECT id, matricule, email, full_name, role, department, phone, job_title, manager_name, hire_date, location, status, created_at, last_login_at, COALESCE(profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar FROM users WHERE id = ${learnerId} LIMIT 1`,
         db.sql`
           SELECT e.id, e.status, e.progress_percent, e.assigned_at, e.due_at, e.completed_at,
                  c.id AS course_id, c.code, c.title, c.category,
@@ -193,7 +215,7 @@ const handler = async (request: Request) => {
         WHERE c.published = TRUE
         ORDER BY c.mandatory DESC, e.due_at NULLS LAST, c.title
       `,
-      db.sql`SELECT full_name, email, department, job_title FROM users WHERE id = ${user.id} LIMIT 1`,
+      db.sql`SELECT full_name, email, department, job_title, COALESCE(profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar FROM users WHERE id = ${user.id} LIMIT 1`,
       db.sql`
         SELECT cert.certificate_number, cert.course_id, cert.score, cert.issued_at,
                c.code AS course_code, c.title AS course_title

@@ -21,6 +21,7 @@ La base est relationnelle et sépare l’identité, le contenu, le suivi pédago
 - les couples apprenant/formation et apprenant/module sont uniques pour empêcher les doublons ;
 - `enrollments.assignment_source` indique si l’affectation vient de l’administration, du Passeport ou d’un import ;
 - les appels d’intégration utilisent une `idempotency_key` unique.
+- `users.profile_metadata` conserve uniquement la référence et le type MIME de la photo ; le fichier lui-même reste dans Netlify Blobs.
 
 ## Principe de démarrage à vide
 

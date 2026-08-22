@@ -45,6 +45,13 @@ Netlify détecte ce dossier et applique les migrations juste avant la publicatio
 
 Les nouvelles inscriptions reçoivent automatiquement le rôle `learner` par la fonction `netlify/functions/identity.mts`. Elles ne reçoivent aucune formation à l’inscription : le tableau de bord reste vide jusqu’à une affectation réalisée depuis la fiche apprenant ou reçue du Passeport.
 
+### Confirmation et réinitialisation du mot de passe
+
+- le lien de confirmation valide l’adresse puis ramène vers la connexion avec un message explicite ;
+- le lien de récupération ouvre obligatoirement le formulaire « Choisissez un nouveau mot de passe » ;
+- l’utilisateur saisit et confirme son nouveau mot de passe, puis revient à la connexion ;
+- un lien utilisé, invalide ou expiré ne doit jamais ouvrir directement le tableau de bord.
+
 ## 5. Créer le premier super-administrateur
 
 1. Invitez d’abord la personne dans **Project configuration → Identity → Users**.
@@ -83,16 +90,20 @@ Après modification d’une variable, relancez un déploiement.
 
 Les imports PDF, DOCX, PPTX et MP4 passent par `/.netlify/functions/upload`. Les fichiers sont validés, limités à 50 Mo et stockés dans Netlify Blobs, store `walyah-lms-content`. Les métadonnées sont enregistrées dans `resources`.
 
+Les photos JPG, PNG et WebP sont limitées à 5 Mo et stockées séparément dans le store privé `walyah-lms-avatars`. Un apprenant modifie uniquement sa propre photo ; les administrateurs peuvent la consulter depuis sa fiche.
+
 ## 8. Vérifications après publication
 
 1. créez un apprenant et vérifiez qu’il reçoit `learner`, avec zéro formation, zéro certificat et zéro progression ;
-2. créez un super-administrateur et reconnectez-vous ;
-3. ouvrez **Apprenants**, cliquez sur un nom et vérifiez la fiche individuelle ;
-4. ouvrez **Catalogues 2026** et contrôlez le compteur de 144 formations ;
-5. ouvrez la fiche de cet apprenant, assignez une formation et vérifiez qu’elle apparaît alors dans son espace ;
-6. passez un QCM et vérifiez le certificat ;
-7. importez un petit PDF ;
-8. consultez les lignes dans **Data & Storage → Database**.
+2. demandez une réinitialisation et vérifiez que le lien ouvre le formulaire de nouveau mot de passe, jamais directement le tableau de bord ;
+3. créez un super-administrateur, reconnectez-vous et vérifiez le tableau de bord de gouvernance ;
+4. connectez-vous avec un administrateur et vérifiez le tableau de bord de pilotage opérationnel ;
+5. ouvrez **Apprenants**, cliquez sur un nom et vérifiez la fiche individuelle ;
+6. depuis le profil apprenant, importez une petite photo JPG ou PNG ;
+7. ouvrez **Catalogues 2026** et contrôlez le compteur de 144 formations ;
+8. ouvrez la fiche de cet apprenant, assignez une formation et vérifiez qu’elle apparaît alors dans son espace ;
+9. passez un QCM et vérifiez le certificat ;
+10. importez un petit PDF puis consultez les lignes dans **Data & Storage → Database**.
 
 ## 9. Si le build Netlify échoue
 

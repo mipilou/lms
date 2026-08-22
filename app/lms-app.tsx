@@ -1,14 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   ArrowLeft, Award, Bell, BookOpen, Check, CheckCircle2,
-  ChevronDown, ChevronRight, Circle, CircleHelp, ClipboardCheck, Clock3, Download,
+  Camera, ChevronDown, ChevronRight, Circle, CircleHelp, ClipboardCheck, Clock3, Download,
   Edit3, ExternalLink, Eye, EyeOff, FileQuestion, FileText, FileUp, Filter, Inbox, LayoutDashboard,
-  LibraryBig, Link2, LockKeyhole, LogOut, Menu, MoreHorizontal, Play, Plus,
+  KeyRound, LibraryBig, Link2, LockKeyhole, LogOut, Menu, MoreHorizontal, Play, Plus,
   Save, Search, Send, Settings, ShieldCheck, Sparkles, Trash2, TrendingUp,
-  UploadCloud, UserPlus, UserRound, UsersRound, Video, X,
+  UploadCloud, UserCog, UserPlus, UserRound, UsersRound, Video, X,
 } from "lucide-react";
 import {
   catalogueTotals, courses, readyCourseByCode, trainingCatalogue,
@@ -29,7 +29,7 @@ type CertificateRecord = {
 };
 
 type ActivityRecord = { type: string; summary: string; occurredAt: string };
-type LearnerProfile = { fullName: string; email: string; department: string; jobTitle: string };
+type LearnerProfile = { fullName: string; email: string; department: string; jobTitle: string; avatarUrl?: string };
 type LearnerWorkspace = {
   loading: boolean;
   error: string;
@@ -40,6 +40,8 @@ type LearnerWorkspace = {
 };
 
 type AdminActivity = { name: string; initials: string; summary: string; detail: string; occurredAt: string };
+type AdminAccount = { id: string; name: string; email: string; role: Role; status: string; lastLoginAt: string | null };
+type RoleAudit = { id: string; actorName: string; targetName: string; previousRole: Role | null; newRole: Role; occurredAt: string };
 type AdminSnapshot = {
   learners: number;
   publishedCourses: number;
@@ -51,6 +53,12 @@ type AdminSnapshot = {
   assignedEnrollments: number;
   completionRate: number;
   inactiveUsers: number;
+  activeUsers7d: number;
+  admins: number;
+  superAdmins: number;
+  passportConnected: number;
+  integrationsPending: number;
+  integrationsFailed: number;
   activities: AdminActivity[];
   loginSeries: number[];
 };
@@ -58,8 +66,12 @@ type AdminSnapshot = {
 const EMPTY_ADMIN: AdminSnapshot = {
   learners: 0, publishedCourses: 0, certificates: 0, loginsToday: 0, overdue: 0,
   completedEnrollments: 0, inProgressEnrollments: 0, assignedEnrollments: 0,
-  completionRate: 0, inactiveUsers: 0, activities: [], loginSeries: [0, 0, 0, 0, 0, 0, 0],
+  completionRate: 0, inactiveUsers: 0, activeUsers7d: 0, admins: 0, superAdmins: 0,
+  passportConnected: 0, integrationsPending: 0, integrationsFailed: 0,
+  activities: [], loginSeries: [0, 0, 0, 0, 0, 0, 0],
 };
+
+type IdentityCandidate = { email?: string; name?: string; roles?: string[]; userMetadata?: Record<string, unknown> };
 
 const learnerNav: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Mon tableau de bord", icon: LayoutDashboard },
@@ -123,6 +135,34 @@ function roleLabel(role: Role) {
   if (role === "super_admin") return "Super-administrateur";
   if (role === "admin") return "Administrateur";
   return "Apprenant";
+}
+
+function sessionFromIdentity(candidate: IdentityCandidate, fallbackEmail = "", fallbackName = ""): Session {
+  const name = candidate.name || String(candidate.userMetadata?.full_name ?? "") || fallbackName || candidate.email || "Apprenant";
+  return {
+    name,
+    email: candidate.email || fallbackEmail,
+    initials: initialsFrom(name),
+    role: roleFromClaims(candidate.roles),
+    authProvider: "netlify",
+  };
+}
+
+function authErrorMessage(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const normalized = raw.toLowerCase();
+  if (normalized.includes("email not confirmed")) return "Votre adresse e-mail n’est pas encore confirmée. Ouvrez le dernier e-mail de confirmation reçu, puis revenez vous connecter.";
+  if (normalized.includes("no user found") || normalized.includes("password invalid") || normalized.includes("invalid login credentials")) return "Adresse e-mail ou mot de passe incorrect. Vérifiez l’adresse utilisée et votre nouveau mot de passe.";
+  if (normalized.includes("recovery") || normalized.includes("expired") || normalized.includes("token")) return "Ce lien de sécurité est invalide ou a expiré. Demandez un nouvel e-mail de réinitialisation.";
+  return raw || "La connexion est momentanément impossible. Réessayez dans quelques instants.";
+}
+
+function avatarEndpoint(userId = "me", version?: number) {
+  return `/.netlify/functions/upload?avatar=${encodeURIComponent(userId)}${version ? `&v=${version}` : ""}`;
+}
+
+function UserAvatar({ name, initials, src, className = "" }: { name: string; initials: string; src?: string; className?: string }) {
+  return <span className={`avatar avatar-dark user-avatar ${className}`}>{src ? <Image src={src} alt={`Photo de ${name}`} fill sizes="72px" unoptimized /> : initials}</span>;
 }
 
 function formatDuration(minutes: number) {
@@ -219,13 +259,26 @@ function usesNetlifyIdentity() {
   );
 }
 
-function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) => void }) {
+function AuthStory() {
+  return <section className="auth-story" aria-label="Présentation de la plateforme">
+    <div className="auth-glow auth-glow-one" /><div className="auth-glow auth-glow-two" />
+    <Brand light />
+    <div className="auth-story-content">
+      <span className="eyebrow eyebrow-light"><Sparkles size={14} /> Développer les compétences, simplement</span>
+      <h1>La formation qui fait avancer toute votre équipe.</h1>
+      <p>Centralisez les parcours, suivez les progrès et accompagnez chaque collaborateur depuis une seule plateforme claire et engageante.</p>
+      <div className="auth-proof-grid"><div><strong>Affectations ciblées</strong><span>Chaque apprenant reçoit uniquement les parcours choisis.</span></div><div><strong>Suivi vérifiable</strong><span>Progression, résultats et connexions sont consolidés.</span></div><div><strong>Passeport connecté</strong><span>Les acquis peuvent être synchronisés entre les deux outils.</span></div></div>
+    </div>
+  </section>;
+}
+
+function AuthScreen({ onAuthenticated, initialMessage = "" }: { onAuthenticated: (session: Session) => void; initialMessage?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showSignup, setShowSignup] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(initialMessage);
   const [loading, setLoading] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -247,12 +300,9 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
         setMessage("Compte créé. Consultez votre e-mail pour confirmer votre adresse, puis connectez-vous.");
         return;
       }
-      const candidate = authenticated as unknown as { email?: string; name?: string; roles?: string[]; userMetadata?: Record<string, unknown> };
-      const name = candidate.name || String(candidate.userMetadata?.full_name ?? "") || fullName.trim() || candidate.email || "Apprenant";
-      const role = roleFromClaims(candidate.roles);
-      onAuthenticated({ name, email: candidate.email || email, initials: initialsFrom(name), role, authProvider: "netlify" });
+      onAuthenticated(sessionFromIdentity(authenticated as unknown as IdentityCandidate, email, fullName.trim()));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Connexion impossible. Vérifiez vos informations.");
+      setMessage(authErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -274,7 +324,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
       await identity.requestPasswordRecovery(email.trim().toLowerCase());
       setMessage("Un e-mail de réinitialisation vient de vous être envoyé.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Envoi impossible.");
+      setMessage(authErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -282,16 +332,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
 
   return (
     <main className="auth-page">
-      <section className="auth-story" aria-label="Présentation de la plateforme">
-        <div className="auth-glow auth-glow-one" /><div className="auth-glow auth-glow-two" />
-        <Brand light />
-        <div className="auth-story-content">
-          <span className="eyebrow eyebrow-light"><Sparkles size={14} /> Développer les compétences, simplement</span>
-          <h1>La formation qui fait avancer toute votre équipe.</h1>
-          <p>Centralisez les parcours, suivez les progrès et accompagnez chaque collaborateur depuis une seule plateforme claire et engageante.</p>
-          <div className="auth-proof-grid"><div><strong>Affectations ciblées</strong><span>Chaque apprenant reçoit uniquement les parcours choisis.</span></div><div><strong>Suivi vérifiable</strong><span>Progression, résultats et connexions sont consolidés.</span></div><div><strong>Passeport connecté</strong><span>Les acquis peuvent être synchronisés entre les deux outils.</span></div></div>
-        </div>
-      </section>
+      <AuthStory />
 
       <section className="auth-panel">
         <div className="mobile-brand"><Brand /></div>
@@ -313,6 +354,48 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
   );
 }
 
+function PasswordResetScreen({ onComplete, onCancel }: { onComplete: (message: string) => void; onCancel: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage("");
+    if (password.length < 8) { setMessage("Le nouveau mot de passe doit contenir au moins 8 caractères."); return; }
+    if (password !== confirmation) { setMessage("Les deux mots de passe ne correspondent pas."); return; }
+    setLoading(true);
+    try {
+      const identity = await import("@netlify/identity");
+      await identity.updateUser({ password });
+      await identity.logout();
+      onComplete("Votre mot de passe a été modifié. Connectez-vous maintenant avec votre nouveau mot de passe.");
+    } catch (error) {
+      setMessage(authErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+  return <main className="auth-page">
+    <AuthStory />
+    <section className="auth-panel">
+      <div className="mobile-brand"><Brand /></div>
+      <div className="auth-card reset-card">
+        <div className="auth-heading"><span className="status-pill"><KeyRound size={14} /> Réinitialisation sécurisée</span><h2>Choisissez un nouveau mot de passe</h2><p>Le lien reçu a été vérifié. Définissez maintenant votre nouveau mot de passe avant d’accéder à l’application.</p></div>
+        <form onSubmit={submit}>
+          <label className="field-label">Nouveau mot de passe<span className="input-wrap"><LockKeyhole size={18} /><input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} autoComplete="new-password" required /><button className="password-toggle" type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+          <label className="field-label">Confirmer le mot de passe<span className="input-wrap"><ShieldCheck size={18} /><input type={showPassword ? "text" : "password"} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={8} autoComplete="new-password" required /></span></label>
+          {message && <p className="form-message" role="alert">{message}</p>}
+          <button className="primary-button auth-submit" type="submit" disabled={loading}>{loading ? "Enregistrement…" : "Enregistrer le nouveau mot de passe"}<ChevronRight size={18} /></button>
+          <button className="text-button reset-cancel" type="button" onClick={onCancel} disabled={loading}>Annuler et revenir à la connexion</button>
+        </form>
+      </div>
+      <p className="auth-footer">© 2026 Walyah Académie · Accès sécurisé</p>
+    </section>
+  </main>;
+}
+
 function Brand({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
   return <div className={`brand brand-logo ${light ? "brand-light" : ""} ${compact ? "brand-compact" : ""}`}><span className="brand-logo-shell"><Image className="brand-logo-image" src="/walyah-logo-transparent.png" alt="Walyah Académie" width={2048} height={2048} priority /></span></div>;
 }
@@ -331,12 +414,12 @@ function Sidebar({ role, view, onView, open, onClose }: { role: Role; view: View
   </>;
 }
 
-function Topbar({ session, onMenu, onLogout }: { session: Session; onMenu: () => void; onLogout: () => void }) {
+function Topbar({ session, avatarUrl, onMenu, onLogout }: { session: Session; avatarUrl?: string; onMenu: () => void; onLogout: () => void }) {
   return <header className="topbar">
     <button className="icon-button mobile-menu" aria-label="Ouvrir le menu" onClick={onMenu}><Menu size={21} /></button>
     <div className="global-search"><Search size={18} /><input aria-label="Rechercher" placeholder={session.role === "learner" ? "Rechercher une formation…" : "Rechercher un apprenant, une formation…"} /><kbd>⌘ K</kbd></div>
     <div className="topbar-brand"><Brand compact /></div>
-    <div className="topbar-actions"><button className="icon-button notification-button" aria-label="Notifications"><Bell size={20} /><span /></button><div className="profile-chip"><span className="avatar avatar-dark">{session.initials}</span><span className="profile-copy"><strong>{session.name}</strong><small>{roleLabel(session.role)}</small></span><button className="icon-button" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout}><LogOut size={18} /></button></div></div>
+    <div className="topbar-actions"><div className="profile-chip"><UserAvatar name={session.name} initials={session.initials} src={avatarUrl} /><span className="profile-copy"><strong>{session.name}</strong><small>{roleLabel(session.role)}</small></span><button className="icon-button" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout}><LogOut size={18} /></button></div><button className="icon-button notification-button" aria-label="Ouvrir les notifications" title="Notifications"><Bell size={20} /></button></div>
   </header>;
 }
 
@@ -379,13 +462,19 @@ function LearnerDashboard({ name, workspace, onView, onCourse }: { name: string;
   </>;
 }
 
-function AdminDashboard({ onView }: { onView: (view: View) => void }) {
+function useAdminWorkspace() {
   const [metrics, setMetrics] = useState<AdminSnapshot>(EMPTY_ADMIN);
+  const [accounts, setAccounts] = useState<AdminAccount[]>([]);
+  const [roleAudit, setRoleAudit] = useState<RoleAudit[]>([]);
   const [loading, setLoading] = useState(() => usesNetlifyIdentity());
   const [loadError, setLoadError] = useState("");
   useEffect(() => {
     if (!usesNetlifyIdentity()) return;
-    void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { totals?: Record<string, number>; recentActivity?: Array<Record<string, unknown>>; dailyLogins?: Array<Record<string, unknown>> }) => {
+    void fetch("/.netlify/functions/lms-data?scope=admin").then(async (response) => {
+      const data = await response.json() as { error?: string; totals?: Record<string, number>; recentActivity?: Array<Record<string, unknown>>; dailyLogins?: Array<Record<string, unknown>>; accounts?: Array<Record<string, unknown>>; roleAudit?: Array<Record<string, unknown>> };
+      if (!response.ok) throw new Error(data.error || "Chargement impossible");
+      return data;
+    }).then((data) => {
       const totals = data.totals ?? {};
       const loginMap = new Map((data.dailyLogins ?? []).map((item) => [String(item.day), Number(item.count ?? 0)]));
       const loginSeries = Array.from({ length: 7 }, (_, offset) => {
@@ -396,14 +485,23 @@ function AdminDashboard({ onView }: { onView: (view: View) => void }) {
         learners: Number(totals.learners ?? 0), publishedCourses: Number(totals.published_courses ?? 0), certificates: Number(totals.certificates ?? 0),
         loginsToday: Number(totals.logins_today ?? 0), overdue: Number(totals.overdue ?? 0), completedEnrollments: Number(totals.completed_enrollments ?? 0),
         inProgressEnrollments: Number(totals.in_progress_enrollments ?? 0), assignedEnrollments: Number(totals.assigned_enrollments ?? 0),
-        completionRate: Number(totals.completion_rate ?? 0), inactiveUsers: Number(totals.inactive_users ?? 0), loginSeries,
+        completionRate: Number(totals.completion_rate ?? 0), inactiveUsers: Number(totals.inactive_users ?? 0), activeUsers7d: Number(totals.active_users_7d ?? 0),
+        admins: Number(totals.admins ?? 0), superAdmins: Number(totals.super_admins ?? 0), passportConnected: Number(totals.passport_connected ?? 0),
+        integrationsPending: Number(totals.integrations_pending ?? 0), integrationsFailed: Number(totals.integrations_failed ?? 0), loginSeries,
         activities: (data.recentActivity ?? []).map((item) => { const name = String(item.full_name ?? item.email ?? "Utilisateur"); return { name, initials: initialsFrom(name), summary: String(item.summary ?? "Activité enregistrée"), detail: String(item.entity_title ?? item.event_type ?? ""), occurredAt: String(item.occurred_at ?? "") }; }),
       });
+      setAccounts((data.accounts ?? []).map((item) => ({ id: String(item.id), name: String(item.full_name ?? item.email ?? "Utilisateur"), email: String(item.email ?? ""), role: roleFromClaims([String(item.role ?? "learner")]), status: String(item.status ?? "active"), lastLoginAt: item.last_login_at ? String(item.last_login_at) : null })));
+      setRoleAudit((data.roleAudit ?? []).map((item) => ({ id: String(item.id), actorName: String(item.actor_name ?? "Administration"), targetName: String(item.target_name ?? "Utilisateur"), previousRole: item.previous_role ? roleFromClaims([String(item.previous_role)]) : null, newRole: roleFromClaims([String(item.new_role)]), occurredAt: String(item.occurred_at ?? "") })));
     }).catch(() => { setMetrics(EMPTY_ADMIN); setLoadError("Les indicateurs n’ont pas pu être chargés depuis la base Netlify."); }).finally(() => setLoading(false));
   }, []);
+  return { metrics, accounts, setAccounts, roleAudit, loading, loadError };
+}
+
+function AdminDashboard({ onView }: { onView: (view: View) => void }) {
+  const { metrics, loading, loadError } = useAdminWorkspace();
   const maxLogins = Math.max(...metrics.loginSeries, 1);
   return <>
-    <section className="page-heading"><div><span className="eyebrow">Pilotage de la formation</span><h1>Vue d’ensemble</h1><p>Suivez l’engagement de vos équipes et agissez au bon moment.</p></div><div className="heading-actions"><button className="secondary-button"><UploadCloud size={17} /> Importer</button><button className="primary-button" onClick={() => onView("trainings")}><BookOpen size={17} /> Nouvelle formation</button></div></section>
+    <section className="page-heading"><div><span className="eyebrow">Pilotage opérationnel</span><h1>Tableau de bord administrateur</h1><p>Affectez les formations, suivez les progrès et relancez les apprenants au bon moment.</p></div><div className="heading-actions"><button className="secondary-button" onClick={() => onView("users")}><UserPlus size={17} /> Gérer les apprenants</button><button className="primary-button" onClick={() => onView("trainings")}><BookOpen size={17} /> Nouvelle formation</button></div></section>
     {loadError && <div className="form-message" role="alert">{loadError}</div>}
     <section className="metric-grid admin-metrics">
       <article className="metric-card admin-card"><div className="metric-icon tone-teal-soft"><UsersRound size={21} /></div><div><span>Apprenants inscrits</span><strong>{loading ? "…" : metrics.learners}</strong><small>Comptes réels dans la base</small></div><span className="mini-label">{metrics.publishedCourses} parcours publiés</span></article>
@@ -416,6 +514,45 @@ function AdminDashboard({ onView }: { onView: (view: View) => void }) {
       <article className="panel engagement-panel"><div className="panel-heading"><div><span className="eyebrow">Engagement</span><h3>Connexions récentes</h3></div><button className="text-button strong" onClick={() => onView("activity")}>Voir le journal</button></div><div className="engagement-summary"><div><strong>{metrics.loginsToday}</strong><span>connexion{metrics.loginsToday > 1 ? "s" : ""} aujourd’hui</span></div><span className="positive-chip">Suivi actif</span></div><div className="day-bars" aria-label="Connexions des sept derniers jours">{metrics.loginSeries.map((count, index) => <div key={index} title={`${count} connexion${count > 1 ? "s" : ""}`}><span style={{ height: `${Math.max(4, Math.round((count / maxLogins) * 100))}%` }} /><small>{["J-6", "J-5", "J-4", "J-3", "J-2", "J-1", "J"][index]}</small></div>)}</div><div className="peak-note"><TrendingUp size={17} /><span><strong>Données alimentées à chaque connexion</strong><small>{metrics.inactiveUsers} compte{metrics.inactiveUsers > 1 ? "s" : ""} inactif{metrics.inactiveUsers > 1 ? "s" : ""}</small></span></div></article>
     </section>
     <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">En direct</span><h3>Activité récente</h3></div><button className="text-button strong" onClick={() => onView("activity")}>Tout afficher <ChevronRight size={15} /></button></div>{metrics.activities.length ? <div className="activity-list">{metrics.activities.map((activity, index) => <div className="activity-item" key={`${activity.occurredAt}-${index}`}><span className="avatar avatar-teal">{activity.initials}</span><div className="activity-copy"><p><strong>{activity.name}</strong></p><span>{activity.summary}</span></div><span className="activity-detail">{activity.detail}</span><time>{formatDateTime(activity.occurredAt)}</time></div>)}</div> : <div className="table-empty"><TrendingUp size={22} /><strong>Aucune activité enregistrée</strong><span>Les événements apparaîtront après les premières affectations.</span></div>}</section>
+  </>;
+}
+
+function RoleControl({ account, onUpdated }: { account: AdminAccount; onUpdated: (account: AdminAccount) => void }) {
+  const [role, setRole] = useState<Role>(account.role);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const save = async () => {
+    if (role === account.role) return;
+    setSaving(true); setMessage("");
+    try {
+      const response = await fetch("/.netlify/functions/user-admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update-role", userId: account.id, role }) });
+      const data = await response.json() as { error?: string; message?: string };
+      if (!response.ok) throw new Error(data.error || "Mise à jour impossible");
+      onUpdated({ ...account, role });
+      setMessage("Rôle enregistré");
+    } catch (error) { setRole(account.role); setMessage(error instanceof Error ? error.message : "Mise à jour impossible"); }
+    finally { setSaving(false); }
+  };
+  return <div className="role-control"><select aria-label={`Rôle de ${account.name}`} value={role} onChange={(event) => setRole(event.target.value as Role)}><option value="learner">Apprenant</option><option value="admin">Administrateur</option><option value="super_admin">Super-administrateur</option></select><button className="secondary-button" onClick={save} disabled={saving || role === account.role}>{saving ? "…" : "Appliquer"}</button>{message && <small>{message}</small>}</div>;
+}
+
+function SuperAdminDashboard({ onView }: { onView: (view: View) => void }) {
+  const { metrics, accounts, setAccounts, roleAudit, loading, loadError } = useAdminWorkspace();
+  const updateAccount = (updated: AdminAccount) => setAccounts((current) => current.map((account) => account.id === updated.id ? updated : account));
+  return <>
+    <section className="page-heading"><div><span className="eyebrow">Gouvernance de la plateforme</span><h1>Tableau de bord super-administrateur</h1><p>Contrôlez les accès, la santé des intégrations et l’activité globale du LMS.</p></div><div className="heading-actions"><button className="secondary-button" onClick={() => onView("activity")}><TrendingUp size={17} /> Consulter les journaux</button><button className="primary-button" onClick={() => onView("users")}><UsersRound size={17} /> Ouvrir les apprenants</button></div></section>
+    {loadError && <div className="form-message" role="alert">{loadError}</div>}
+    <section className="metric-grid admin-metrics superadmin-metrics">
+      <article className="metric-card admin-card"><div className="metric-icon tone-teal-soft"><UsersRound size={21} /></div><div><span>Apprenants</span><strong>{loading ? "…" : metrics.learners}</strong><small>{metrics.activeUsers7d} actif{metrics.activeUsers7d > 1 ? "s" : ""} sur 7 jours</small></div></article>
+      <article className="metric-card admin-card"><div className="metric-icon tone-blue-soft"><UserCog size={21} /></div><div><span>Administrateurs</span><strong>{metrics.admins}</strong><small>Gestion opérationnelle</small></div></article>
+      <article className="metric-card admin-card"><div className="metric-icon tone-violet-soft"><ShieldCheck size={21} /></div><div><span>Super-administrateurs</span><strong>{metrics.superAdmins}</strong><small>Gouvernance sensible</small></div></article>
+      <article className="metric-card admin-card"><div className="metric-icon tone-coral-soft"><Link2 size={21} /></div><div><span>Passeports connectés</span><strong>{metrics.passportConnected}</strong><small>{metrics.integrationsPending} événement{metrics.integrationsPending > 1 ? "s" : ""} en attente</small></div></article>
+    </section>
+    <section className="governance-grid">
+      <article className="panel access-governance"><div className="panel-heading"><div><span className="eyebrow">Contrôle des droits</span><h3>Comptes et rôles</h3></div><span className="count-badge">{accounts.length} compte{accounts.length > 1 ? "s" : ""}</span></div>{accounts.length ? <div className="account-role-list">{accounts.map((account) => <div key={account.id}><UserAvatar name={account.name} initials={initialsFrom(account.name)} /><span><strong>{account.name}</strong><small>{account.email} · dernière connexion {formatDateTime(account.lastLoginAt)}</small></span><RoleControl account={account} onUpdated={updateAccount} /></div>)}</div> : <div className="table-empty"><UserCog size={22} /><strong>{loading ? "Chargement des comptes…" : "Aucun compte enregistré"}</strong></div>}</article>
+      <article className="panel platform-health"><div className="panel-heading"><div><span className="eyebrow">Interopérabilité</span><h3>État des services</h3></div><ShieldCheck size={20} /></div><div className="health-list"><span><i className="health-ok" /><span><strong>Authentification</strong><small>Rôles vérifiés côté serveur</small></span><b>Opérationnelle</b></span><span><i className={metrics.integrationsFailed ? "health-alert" : "health-ok"} /><span><strong>Passeport de formation</strong><small>{metrics.integrationsPending} en attente · {metrics.integrationsFailed} en erreur</small></span><b>{metrics.integrationsFailed ? "À contrôler" : "Opérationnel"}</b></span><span><i className="health-ok" /><span><strong>Base de données</strong><small>{metrics.publishedCourses} parcours publiés</small></span><b>Connectée</b></span></div></article>
+    </section>
+    <section className="panel audit-panel"><div className="panel-heading"><div><span className="eyebrow">Traçabilité</span><h3>Derniers changements de rôle</h3></div></div>{roleAudit.length ? <div className="audit-list">{roleAudit.map((entry) => <div key={entry.id}><span className="activity-dot violet" /><span><strong>{entry.targetName}</strong><small>{entry.previousRole ? roleLabel(entry.previousRole) : "Aucun rôle"} → {roleLabel(entry.newRole)} · par {entry.actorName}</small></span><time>{formatDateTime(entry.occurredAt)}</time></div>)}</div> : <div className="table-empty"><ShieldCheck size={22} /><strong>Aucun changement de rôle enregistré</strong><span>Les modifications effectuées ici seront historisées.</span></div>}</section>
   </>;
 }
 
@@ -548,6 +685,7 @@ function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
         const rawStatus = String(row.status ?? "active");
         return {
           id: String(row.id), matricule: String(row.matricule ?? "À renseigner"), name, initials: initialsFrom(name), email: String(row.email ?? ""), phone: "À renseigner",
+          avatarUrl: Boolean(row.has_avatar) ? avatarEndpoint(String(row.id)) : undefined,
           department: String(row.department ?? "Non renseigné"), jobTitle: String(row.job_title ?? "Non renseigné"), manager: "À renseigner", hireDate: "À renseigner", location: String(row.location ?? "Non renseigné"),
           progress: Number(row.progress ?? 0), completed, assigned, lastLogin: row.last_login_at ? new Date(String(row.last_login_at)).toLocaleDateString("fr-FR") : "Jamais", lastLoginDetail: row.last_login_at ? new Date(String(row.last_login_at)).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "",
           status: rawStatus === "inactive" ? "Inactif" : rawStatus === "suspended" ? "À relancer" : "Actif", passportStatus: "À connecter", trainings: [],
@@ -566,7 +704,7 @@ function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
     <section className="page-heading"><div><span className="eyebrow">Gestion des utilisateurs</span><h1>Apprenants</h1><p>Suivez la progression, l’assiduité et les dernières connexions.</p></div><div className="heading-actions"><button className="secondary-button" onClick={exportCsv}><Download size={17} /> Exporter le suivi</button><button className="primary-button" onClick={() => setInviteOpen(true)}><UserPlus size={17} /> Inviter un apprenant</button></div></section>
     {invited.length > 0 && <div className="success-banner"><CheckCircle2 size={18} /> {invited.length} invitation{invited.length > 1 ? "s" : ""} envoyée{invited.length > 1 ? "s" : ""} pendant cette session.</div>}
     {loadError && <div className="form-message" role="alert">{loadError}</div>}
-    <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, matricule, e-mail ou service…" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option><option>Actif</option><option>À relancer</option><option>Inactif</option></select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Apprenant</th><th>Service</th><th>Progression</th><th>Formations</th><th>Dernière connexion</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filtered.map((learner) => <tr className="clickable-row" key={learner.id} onClick={() => onLearner(learner)}><td><button className="person-cell person-button"><span className="avatar avatar-dark">{learner.initials}</span><span><strong>{learner.name}</strong><small>{learner.matricule} · {learner.email}</small></span></button></td><td>{learner.department}</td><td><span className="table-progress"><span><i style={{ width: `${learner.progress}%` }} /></span><strong>{learner.progress} %</strong></span></td><td><strong>{learner.completed}</strong> / {learner.assigned}</td><td><strong>{learner.lastLogin}</strong><small>{learner.lastLoginDetail}</small></td><td><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></td><td><button className="icon-button" aria-label={`Ouvrir la fiche de ${learner.name}`} onClick={(event) => { event.stopPropagation(); onLearner(learner); }}><ChevronRight size={18} /></button></td></tr>)}{filtered.length === 0 && <tr><td colSpan={7}><div className="table-empty">{loading ? <Clock3 size={22} /> : <UsersRound size={22} />}<strong>{loading ? "Chargement des apprenants…" : "Aucun apprenant enregistré"}</strong><span>{loading ? "Veuillez patienter." : "Invitez un apprenant pour créer son dossier vide."}</span></div></td></tr>}</tbody></table></div></section>
+    <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, matricule, e-mail ou service…" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option><option>Actif</option><option>À relancer</option><option>Inactif</option></select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Apprenant</th><th>Service</th><th>Progression</th><th>Formations</th><th>Dernière connexion</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filtered.map((learner) => <tr className="clickable-row" key={learner.id} onClick={() => onLearner(learner)}><td><button className="person-cell person-button"><UserAvatar name={learner.name} initials={learner.initials} src={learner.avatarUrl} /><span><strong>{learner.name}</strong><small>{learner.matricule} · {learner.email}</small></span></button></td><td>{learner.department}</td><td><span className="table-progress"><span><i style={{ width: `${learner.progress}%` }} /></span><strong>{learner.progress} %</strong></span></td><td><strong>{learner.completed}</strong> / {learner.assigned}</td><td><strong>{learner.lastLogin}</strong><small>{learner.lastLoginDetail}</small></td><td><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></td><td><button className="icon-button" aria-label={`Ouvrir la fiche de ${learner.name}`} onClick={(event) => { event.stopPropagation(); onLearner(learner); }}><ChevronRight size={18} /></button></td></tr>)}{filtered.length === 0 && <tr><td colSpan={7}><div className="table-empty">{loading ? <Clock3 size={22} /> : <UsersRound size={22} />}<strong>{loading ? "Chargement des apprenants…" : "Aucun apprenant enregistré"}</strong><span>{loading ? "Veuillez patienter." : "Invitez un apprenant pour créer son dossier vide."}</span></div></td></tr>}</tbody></table></div></section>
     {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} onInvited={(email) => { setInvited([...invited, email]); setInviteOpen(false); }} />}
   </>;
 }
@@ -595,7 +733,7 @@ function LearnerProfileView({ learner: initialLearner, onBack }: { learner: Lear
       const progress = trainings.length ? Math.round(trainings.reduce((sum, item) => sum + item.progress, 0) / trainings.length) : 0;
       const rawStatus = String(profile.status ?? "active");
       const name = String(profile.full_name ?? initialLearner.name);
-      setLearner({ ...initialLearner, name, initials: initialsFrom(name), matricule: String(profile.matricule ?? initialLearner.matricule), email: String(profile.email ?? initialLearner.email), phone: String(profile.phone ?? "À renseigner"), department: String(profile.department ?? "Non renseigné"), jobTitle: String(profile.job_title ?? "Non renseigné"), manager: String(profile.manager_name ?? "À renseigner"), hireDate: profile.hire_date ? formatDate(profile.hire_date) : "À renseigner", location: String(profile.location ?? "Non renseigné"), status: rawStatus === "inactive" ? "Inactif" : rawStatus === "suspended" ? "À relancer" : "Actif", progress, completed, assigned: trainings.length, passportStatus: data.passport?.sync_status === "connected" ? "Synchronisé" : "À connecter", trainings });
+      setLearner({ ...initialLearner, name, initials: initialsFrom(name), matricule: String(profile.matricule ?? initialLearner.matricule), email: String(profile.email ?? initialLearner.email), phone: String(profile.phone ?? "À renseigner"), avatarUrl: Boolean(profile.has_avatar) ? avatarEndpoint(initialLearner.id) : undefined, department: String(profile.department ?? "Non renseigné"), jobTitle: String(profile.job_title ?? "Non renseigné"), manager: String(profile.manager_name ?? "À renseigner"), hireDate: profile.hire_date ? formatDate(profile.hire_date) : "À renseigner", location: String(profile.location ?? "Non renseigné"), status: rawStatus === "inactive" ? "Inactif" : rawStatus === "suspended" ? "À relancer" : "Actif", progress, completed, assigned: trainings.length, passportStatus: data.passport?.sync_status === "connected" ? "Synchronisé" : "À connecter", trainings });
       setPassportLastSync(data.passport?.last_synced_at ? formatDateTime(data.passport.last_synced_at) : "Jamais");
       const activityItems = (data.activity ?? []).map((item) => ({ title: String(item.summary ?? "Activité enregistrée"), detail: String(item.event_type ?? "Événement de formation"), occurredAt: String(item.occurred_at ?? "") }));
       const loginItems = (data.logins ?? []).map((item) => ({ title: String(item.event_type ?? "login") === "login" ? "Connexion réussie" : String(item.event_type), detail: "Accès à la plateforme", occurredAt: String(item.occurred_at ?? "") }));
@@ -621,7 +759,7 @@ function LearnerProfileView({ learner: initialLearner, onBack }: { learner: Lear
   return <>
     <button className="back-button" onClick={onBack}><ArrowLeft size={17} /> Retour aux apprenants</button>
     {notice && <div className="success-banner"><CheckCircle2 size={18} /> {notice}</div>}
-    <section className="learner-profile-hero"><div className="profile-identity"><span className="avatar avatar-dark profile-avatar">{learner.initials}</span><div><div className="profile-title-row"><h1>{learner.name}</h1><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></div><p>{learner.jobTitle} · {learner.department}</p><span>{learner.matricule} · {learner.email}</span></div></div><div className="heading-actions"><button className="secondary-button" onClick={downloadRecord}><Download size={17} /> Exporter la fiche</button><button className="primary-button" onClick={() => setAssignOpen(true)}><Plus size={17} /> Assigner une formation</button></div></section>
+    <section className="learner-profile-hero"><div className="profile-identity"><UserAvatar name={learner.name} initials={learner.initials} src={learner.avatarUrl} className="profile-avatar" /><div><div className="profile-title-row"><h1>{learner.name}</h1><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></div><p>{learner.jobTitle} · {learner.department}</p><span>{learner.matricule} · {learner.email}</span></div></div><div className="heading-actions"><button className="secondary-button" onClick={downloadRecord}><Download size={17} /> Exporter la fiche</button><button className="primary-button" onClick={() => setAssignOpen(true)}><Plus size={17} /> Assigner une formation</button></div></section>
     <section className="learner-profile-metrics"><article><ProgressRing value={learner.progress} size={66} /><span><strong>Progression globale</strong><small>{learner.completed} formation{learner.completed > 1 ? "s" : ""} terminée{learner.completed > 1 ? "s" : ""} sur {learner.assigned}</small></span></article><article><Award size={25} /><span><strong>{learner.trainings.filter((item) => item.certificate).length} certificat{learner.trainings.filter((item) => item.certificate).length > 1 ? "s" : ""}</strong><small>Attestations disponibles</small></span></article><article><Clock3 size={25} /><span><strong>{learner.lastLogin} · {learner.lastLoginDetail}</strong><small>Dernière connexion</small></span></article><article><Link2 size={25} /><span><strong>{learner.passportStatus}</strong><small>Passeport de formation</small></span></article></section>
     <section className="learner-profile-grid"><article className="panel profile-details"><div className="panel-heading"><div><span className="eyebrow">Dossier collaborateur</span><h3>Informations générales</h3></div><Edit3 size={18} /></div><dl><div><dt>Matricule</dt><dd>{learner.matricule}</dd></div><div><dt>Fonction</dt><dd>{learner.jobTitle}</dd></div><div><dt>Service</dt><dd>{learner.department}</dd></div><div><dt>Responsable</dt><dd>{learner.manager}</dd></div><div><dt>Site</dt><dd>{learner.location}</dd></div><div><dt>Date d’entrée</dt><dd>{learner.hireDate}</dd></div><div><dt>Téléphone</dt><dd>{learner.phone}</dd></div><div><dt>E-mail</dt><dd>{learner.email}</dd></div></dl></article><article className="panel passport-panel"><div className="panel-heading"><div><span className="eyebrow">Interopérabilité</span><h3>Passeport de formation</h3></div><span className={`status-tag ${learner.passportStatus === "Synchronisé" ? "status-actif" : "status-relancer"}`}>{learner.passportStatus}</span></div><p>Le LMS prépare les événements d’assignation, de progression, de réussite et de certificat. La correspondance utilise d’abord le matricule, puis l’e-mail.</p><div className="passport-keys"><span><small>Clé principale</small><strong>{learner.matricule}</strong></span><span><small>Dernière synchronisation</small><strong>{passportLastSync}</strong></span></div><button className="secondary-button" onClick={requestPassportSync}><Link2 size={16} /> {learner.passportStatus === "Synchronisé" ? "Synchroniser maintenant" : "Connecter le passeport"}</button></article></section>
     <section className="panel training-history"><div className="panel-heading"><div><span className="eyebrow">Traçabilité individuelle</span><h3>Éléments de formation réalisés et assignés</h3></div><span className="count-badge">{learner.trainings.length} parcours</span></div>{learner.trainings.length ? <div className="training-records">{learner.trainings.map((item) => <article key={`${learner.id}-${item.code}`}><div className="record-main"><span className="course-code">{item.code}</span><div><h4>{item.title}</h4><p>Assignée le {item.assignedAt}{item.dueDate ? ` · échéance ${item.dueDate}` : ""}</p></div></div><div className="record-progress"><div><span style={{ width: `${item.progress}%` }} /></div><strong>{item.progress} %</strong><small>{item.completedModules}/{item.modules} modules</small></div><div className="record-result"><span className={`status-tag ${item.status === "Terminée" ? "status-actif" : item.status === "En retard" ? "status-relancer" : "status-active"}`}>{item.status}</span>{item.score !== undefined && <strong>QCM {item.score} %</strong>}{item.certificate && <span className="text-button strong"><Award size={15} /> {item.certificate}</span>}</div></article>)}</div> : <div className="table-empty"><Inbox size={22} /><strong>Aucune formation assignée</strong><span>Utilisez le bouton « Assigner une formation » pour construire progressivement ce parcours.</span></div>}</section>
@@ -802,13 +940,36 @@ function ActivityView() {
   </>;
 }
 
-function SettingsView({ session, profile }: { session: Session; profile: LearnerProfile | null }) {
+function SettingsView({ session, profile, onAvatarUpdated }: { session: Session; profile: LearnerProfile | null; onAvatarUpdated: (url: string) => void }) {
   const isStaff = session.role !== "learner";
-  return <><section className="page-heading"><div><span className="eyebrow">Configuration</span><h1>{isStaff ? "Paramètres de la plateforme" : "Mon profil"}</h1><p>Consultez l’identité et le niveau d’accès reconnus par la plateforme.</p></div>{session.role === "super_admin" && <span className="count-badge"><ShieldCheck size={15} /> Super-administration active</span>}</section><section className="settings-grid"><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Compte</span><h3>Informations générales</h3></div><span className="avatar avatar-dark large-avatar">{session.initials}</span></div><dl className="account-summary"><div><dt>Nom complet</dt><dd>{profile?.fullName || session.name}</dd></div><div><dt>Adresse e-mail</dt><dd>{profile?.email || session.email}</dd></div><div><dt>Fonction</dt><dd>{isStaff ? roleLabel(session.role) : profile?.jobTitle || "Non renseignée"}</dd></div><div><dt>Service</dt><dd>{isStaff ? "Administration de la plateforme" : profile?.department || "Non renseigné"}</dd></div></dl><div className="neutral-note"><ShieldCheck size={17} /><span><strong>Informations issues du compte sécurisé</strong><small>Les changements d’identité et de rôle sont tracés par l’administration.</small></span></div></article><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Notifications</span><h3>Événements suivis</h3></div><Bell size={20} /></div><div className="notification-summary"><span><CheckCircle2 size={18} /><span><strong>Nouvelles affectations</strong><small>Notification lors de l’ajout d’une formation.</small></span></span><span><CheckCircle2 size={18} /><span><strong>Échéances</strong><small>Rappel avant une date limite définie.</small></span></span><span><CheckCircle2 size={18} /><span><strong>Résultats</strong><small>Confirmation après validation et certificat.</small></span></span></div></article></section>{session.role === "super_admin" && <section className="panel superadmin-card"><div><span className="eyebrow">Gouvernance des accès</span><h2>Rôles administratifs</h2><p>Les rôles sensibles sont attribués dans Netlify Identity, puis vérifiés à nouveau par les fonctions serveur avant chaque opération protégée.</p></div><div className="role-matrix"><span><strong>Super-administrateur</strong><small>Accès complet, rôles, intégrations et audit</small></span><span><strong>Administrateur</strong><small>Apprenants, contenus, QCM et suivi</small></span><span><strong>Apprenant</strong><small>Uniquement les parcours qui lui sont assignés</small></span></div></section>}</>;
+  const [uploading, setUploading] = useState(false);
+  const [avatarMessage, setAvatarMessage] = useState("");
+  const uploadAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setAvatarMessage("Choisissez une image JPG, PNG ou WebP."); return; }
+    if (file.size > 5 * 1024 * 1024) { setAvatarMessage("La photo ne doit pas dépasser 5 Mo."); return; }
+    if (!usesNetlifyIdentity()) { setAvatarMessage("L’enregistrement de la photo sera actif sur votre domaine Netlify."); return; }
+    setUploading(true); setAvatarMessage("");
+    try {
+      const form = new FormData(); form.append("purpose", "avatar"); form.append("file", file);
+      const response = await fetch("/.netlify/functions/upload", { method: "POST", body: form });
+      const data = await response.json() as { error?: string; avatarUrl?: string };
+      if (!response.ok) throw new Error(data.error || "Import impossible");
+      const url = `${data.avatarUrl || avatarEndpoint("me")}${(data.avatarUrl || avatarEndpoint("me")).includes("?") ? "&" : "?"}v=${Date.now()}`;
+      onAvatarUpdated(url);
+      setAvatarMessage("Votre photo de profil a bien été enregistrée.");
+    } catch (error) { setAvatarMessage(error instanceof Error ? error.message : "Import impossible"); }
+    finally { setUploading(false); }
+  };
+  return <><section className="page-heading"><div><span className="eyebrow">Configuration</span><h1>{isStaff ? "Paramètres de la plateforme" : "Mon profil"}</h1><p>{isStaff ? "Consultez votre niveau d’accès et la configuration reconnue." : "Personnalisez votre profil et consultez vos informations professionnelles."}</p></div>{session.role === "super_admin" && <span className="count-badge"><ShieldCheck size={15} /> Super-administration active</span>}</section><section className="settings-grid"><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Compte</span><h3>Informations générales</h3></div>{isStaff ? <UserAvatar name={session.name} initials={session.initials} className="large-avatar" /> : <div className="profile-photo-editor"><UserAvatar name={session.name} initials={session.initials} src={profile?.avatarUrl} className="large-avatar" /><label className="avatar-upload-button"><Camera size={15} /> {uploading ? "Import…" : "Modifier"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadAvatar} disabled={uploading} /></label></div>}</div>{avatarMessage && <p className="content-feedback" role="status">{avatarMessage}</p>}<dl className="account-summary"><div><dt>Nom complet</dt><dd>{profile?.fullName || session.name}</dd></div><div><dt>Adresse e-mail</dt><dd>{profile?.email || session.email}</dd></div><div><dt>Fonction</dt><dd>{isStaff ? roleLabel(session.role) : profile?.jobTitle || "Non renseignée"}</dd></div><div><dt>Service</dt><dd>{isStaff ? "Administration de la plateforme" : profile?.department || "Non renseigné"}</dd></div></dl><div className="neutral-note"><ShieldCheck size={17} /><span><strong>Informations issues du compte sécurisé</strong><small>{isStaff ? "Les changements d’identité et de rôle sont tracés." : "La photo est stockée dans votre espace sécurisé et reste modifiable."}</small></span></div></article><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Notifications</span><h3>Événements suivis</h3></div><Bell size={20} /></div><div className="notification-summary"><span><CheckCircle2 size={18} /><span><strong>Nouvelles affectations</strong><small>Notification lors de l’ajout d’une formation.</small></span></span><span><CheckCircle2 size={18} /><span><strong>Échéances</strong><small>Rappel avant une date limite définie.</small></span></span><span><CheckCircle2 size={18} /><span><strong>Résultats</strong><small>Confirmation après validation et certificat.</small></span></span></div></article></section>{session.role === "super_admin" && <section className="panel superadmin-card"><div><span className="eyebrow">Gouvernance des accès</span><h2>Rôles administratifs</h2><p>Les rôles sensibles sont gérés depuis le tableau de bord super-administrateur, puis vérifiés à nouveau par les fonctions serveur.</p></div><div className="role-matrix"><span><strong>Super-administrateur</strong><small>Accès complet, rôles, intégrations et audit</small></span><span><strong>Administrateur</strong><small>Apprenants, contenus, QCM et suivi</small></span><span><strong>Apprenant</strong><small>Uniquement les parcours qui lui sont assignés</small></span></div></section>}</>;
 }
 
 export default function LmsApp({ initialSession = null }: { initialSession?: Session | null }) {
   const [session, setSession] = useState<Session | null>(initialSession);
+  const [passwordReset, setPasswordReset] = useState(false);
+  const [authNotice, setAuthNotice] = useState("");
   const [learnerWorkspace, setLearnerWorkspace] = useState<LearnerWorkspace>({ loading: Boolean(initialSession?.role === "learner"), error: "", courses: [], certificates: [], activity: [], profile: null });
   const [view, setView] = useState<View>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -820,15 +981,34 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
     if (!usesNetlifyIdentity()) return;
     void import("@netlify/identity").then(async (identity) => {
       try {
-        await identity.handleAuthCallback();
-        const user = await identity.getUser();
+        const callback = await identity.handleAuthCallback();
+        if (callback?.type === "recovery") {
+          setSession(null);
+          setPasswordReset(true);
+          setAuthNotice("");
+          return;
+        }
+        if (callback?.type === "confirmation") {
+          await identity.logout();
+          setSession(null);
+          setAuthNotice("Votre adresse e-mail est confirmée. Vous pouvez maintenant vous connecter avec le mot de passe choisi lors de l’inscription.");
+          return;
+        }
+        if (callback?.type === "invite") {
+          setSession(null);
+          setAuthNotice("Cette invitation doit être finalisée depuis l’e-mail reçu. Demandez un nouveau lien si celui-ci a expiré.");
+          return;
+        }
+        const user = callback?.user ?? await identity.getUser();
         if (!user) return;
-        const candidate = user as unknown as { email?: string; name?: string; roles?: string[]; userMetadata?: Record<string, unknown> };
-        const name = candidate.name || String(candidate.userMetadata?.full_name ?? "") || candidate.email || "Apprenant";
-        const role = roleFromClaims(candidate.roles);
-        if (role === "learner") setLearnerWorkspace({ loading: true, error: "", courses: [], certificates: [], activity: [], profile: null });
-        setSession({ name, email: candidate.email || "", initials: initialsFrom(name), role, authProvider: "netlify" });
-      } catch { /* The explicit sign-in form remains available. */ }
+        const restored = sessionFromIdentity(user as unknown as IdentityCandidate);
+        if (restored.role === "learner") setLearnerWorkspace({ loading: true, error: "", courses: [], certificates: [], activity: [], profile: null });
+        setSession(restored);
+      } catch (error) {
+        setSession(null);
+        setPasswordReset(false);
+        setAuthNotice(authErrorMessage(error));
+      }
     });
   }, []);
 
@@ -837,7 +1017,7 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
     void fetch("/.netlify/functions/lms-data").then(async (response) => {
       const data = await response.json() as { error?: string; profile?: Record<string, unknown>; courses?: Array<Record<string, unknown>>; certificates?: Array<Record<string, unknown>>; activity?: Array<Record<string, unknown>> };
       if (!response.ok) throw new Error(data.error || "Chargement impossible");
-      const profile = data.profile ? { fullName: String(data.profile.full_name ?? session.name), email: String(data.profile.email ?? session.email), department: String(data.profile.department ?? ""), jobTitle: String(data.profile.job_title ?? "") } : null;
+      const profile = data.profile ? { fullName: String(data.profile.full_name ?? session.name), email: String(data.profile.email ?? session.email), department: String(data.profile.department ?? ""), jobTitle: String(data.profile.job_title ?? ""), avatarUrl: Boolean(data.profile.has_avatar) ? avatarEndpoint("me") : undefined } : null;
       setLearnerWorkspace({
         loading: false, error: "", profile,
         courses: (data.courses ?? []).map(courseFromRow),
@@ -855,7 +1035,7 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
       return <CourseDetail course={selectedCourse} onBack={() => { setSelectedCourse(null); setView("catalogue"); }} onQuiz={() => setQuizMode(true)} />;
     }
     switch (view) {
-      case "dashboard": return session.role !== "learner" ? <AdminDashboard onView={setView} /> : <LearnerDashboard name={session.name} workspace={learnerWorkspace} onView={setView} onCourse={setSelectedCourse} />;
+      case "dashboard": return session.role === "super_admin" ? <SuperAdminDashboard onView={setView} /> : session.role === "admin" ? <AdminDashboard onView={setView} /> : <LearnerDashboard name={session.name} workspace={learnerWorkspace} onView={setView} onCourse={setSelectedCourse} />;
       case "catalogue": return <CatalogueView assignedCourses={learnerWorkspace.courses} loading={learnerWorkspace.loading} onCourse={setSelectedCourse} />;
       case "catalog": return <FullCatalogueView onCourse={setSelectedCourse} />;
       case "certificates": return <CertificatesView name={session.name} certificates={learnerWorkspace.certificates} loading={learnerWorkspace.loading} />;
@@ -863,7 +1043,7 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
       case "trainings": return <TrainingsView />;
       case "quizzes": return <QuizzesView />;
       case "activity": return <ActivityView />;
-      case "settings": return <SettingsView session={session} profile={learnerWorkspace.profile} />;
+      case "settings": return <SettingsView session={session} profile={learnerWorkspace.profile} onAvatarUpdated={(avatarUrl) => setLearnerWorkspace((current) => ({ ...current, profile: current.profile ? { ...current.profile, avatarUrl } : { fullName: session.name, email: session.email, department: "", jobTitle: "", avatarUrl } }))} />;
       default: return null;
     }
   }, [learnerWorkspace, quizMode, selectedCourse, selectedLearner, session, view]);
@@ -872,14 +1052,17 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
     if (session?.authProvider === "netlify" && usesNetlifyIdentity()) {
       try { const identity = await import("@netlify/identity"); await identity.logout(); } catch { /* Clear local UI even if the request fails. */ }
     }
-    setSession(null); setView("dashboard"); setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setLearnerWorkspace({ loading: false, error: "", courses: [], certificates: [], activity: [], profile: null });
+    setSession(null); setAuthNotice(""); setView("dashboard"); setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setLearnerWorkspace({ loading: false, error: "", courses: [], certificates: [], activity: [], profile: null });
   };
 
   const authenticateSession = (nextSession: Session) => {
     setLearnerWorkspace(nextSession.role === "learner" ? { loading: true, error: "", courses: [], certificates: [], activity: [], profile: null } : { loading: false, error: "", courses: [], certificates: [], activity: [], profile: null });
+    setAuthNotice("");
+    setPasswordReset(false);
     setSession(nextSession);
   };
 
-  if (!session) return <AuthScreen onAuthenticated={authenticateSession} />;
-  return <div className="app-shell"><Sidebar role={session.role} view={view} onView={(next) => { setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setView(next); }} open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="app-main"><Topbar session={session} onMenu={() => setSidebarOpen(true)} onLogout={logoutSession} /><main className="page-content">{content}</main></div></div>;
+  if (passwordReset) return <PasswordResetScreen onComplete={(message) => { setPasswordReset(false); setAuthNotice(message); }} onCancel={() => { void import("@netlify/identity").then((identity) => identity.logout()).catch(() => undefined); setPasswordReset(false); setAuthNotice("Réinitialisation annulée. Vous pouvez demander un nouveau lien depuis la page de connexion."); }} />;
+  if (!session) return <AuthScreen key={authNotice || "auth"} onAuthenticated={authenticateSession} initialMessage={authNotice} />;
+  return <div className="app-shell"><Sidebar role={session.role} view={view} onView={(next) => { setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setView(next); }} open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="app-main"><Topbar session={session} avatarUrl={session.role === "learner" ? learnerWorkspace.profile?.avatarUrl : undefined} onMenu={() => setSidebarOpen(true)} onLogout={logoutSession} /><main className="page-content">{content}</main></div></div>;
 }

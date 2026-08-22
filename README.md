@@ -4,11 +4,13 @@ Application de gestion de la formation conçue pour Walyah Académie : authentif
 
 ## Ce qui est inclus
 
-- authentification e-mail/mot de passe avec Netlify Identity ;
+- authentification e-mail/mot de passe avec confirmation, récupération et formulaire sécurisé de nouveau mot de passe ;
 - rôles serveur `learner`, `admin` et `super_admin` ;
 - création de chaque compte apprenant sans formation, certificat, score ni progression préchargés ;
 - affectation progressive des parcours uniquement par un administrateur, un super-administrateur ou le Passeport ;
 - fiche complète de chaque apprenant accessible depuis le tableau de suivi ;
+- photo de profil modifiable par l’apprenant, stockée dans Netlify Blobs ;
+- tableaux de bord distincts pour l’administration opérationnelle et la super-administration ;
 - historique des assignations, modules, scores, certificats et connexions ;
 - 144 formations structurées issues des deux catalogues 2026 transmis ;
 - 6 parcours déjà scénarisés avec modules pédagogiques ;
@@ -45,7 +47,7 @@ Les migrations SQL placées dans `netlify/database/migrations/` sont appliquées
 
 Les principales tables sont `users`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates`, `login_events`, `activity_events`, `training_requests`, `passport_connections`, `integration_events` et `role_audit_events`.
 
-Les fichiers pédagogiques sont conservés dans le store Netlify Blobs `walyah-lms-content`; la base conserve uniquement les métadonnées et les liens métier.
+Les fichiers pédagogiques sont conservés dans le store Netlify Blobs `walyah-lms-content` et les photos de profil dans `walyah-lms-avatars`; la base conserve uniquement les métadonnées et les liens métier.
 
 ## Passeport de formation
 

@@ -76,6 +76,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .secondary-button:hover { border-color: #b9d8d2; color: var(--teal-dark); }
 .light-button { background: white; color: var(--navy); box-shadow: 0 10px 28px rgba(0,0,0,.14); }
 .auth-submit { width: 100%; height: 52px; margin-top: 4px; justify-content: center; }
+.reset-card .auth-heading p { line-height: 1.55; }
+.reset-cancel { width: 100%; justify-content: center; margin-top: 17px; }
 .auth-switch { margin: 21px 0 0; text-align: center; color: var(--muted); font-size: 12px; }
 .form-message { padding: 10px 12px; border-radius: 8px; background: #fff0ed; color: #a84e40; font-size: 12px; }
 .trust-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 22px; padding: 13px; border-radius: 10px; background: #f2f6f6; color: #6e7c85; font-size: 11px; }
@@ -116,7 +118,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .topbar-actions { display: flex; align-items: center; gap: 13px; margin-left: auto; }
 .icon-button { width: 36px; height: 36px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 9px; background: transparent; color: #64747e; }
 .icon-button:hover { background: #f0f4f3; color: var(--navy); }
-.notification-button { position: relative; }
+.notification-button { position: relative; flex: 0 0 auto; border: 1px solid #eadde0; background: #fff7f8; color: var(--teal-dark); }
 .notification-button > span { position: absolute; top: 6px; right: 7px; width: 7px; height: 7px; border: 2px solid white; border-radius: 50%; background: var(--coral); }
 .profile-chip { display: flex; align-items: center; gap: 10px; padding-left: 14px; border-left: 1px solid var(--line); }
 .avatar { width: 36px; height: 36px; flex: 0 0 auto; display: inline-grid; place-items: center; border-radius: 10px; font-size: 10px; font-weight: 800; }
@@ -124,6 +126,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .avatar-teal { background: #ddf6f0; color: #137d72; }
 .avatar-blue { background: #e7f0fc; color: #3973bd; }
 .avatar-violet { background: #eee9fb; color: #7055bb; }
+.user-avatar { position: relative; overflow: hidden; }
+.user-avatar img { object-fit: cover; }
 .profile-copy strong, .profile-copy small { display: block; }
 .profile-copy strong { font-size: 11px; }
 .profile-copy small { margin-top: 3px; color: #8d999f; font-size: 9px; }
@@ -484,6 +488,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .settings-card .modal-form { padding: 0; }
 .large-avatar { width: 50px; height: 50px; font-size: 12px; }
+.profile-photo-editor { display: flex; align-items: center; gap: 9px; }
+.avatar-upload-button { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid #e0e6e8; border-radius: 9px; background: white; color: var(--teal-dark); font-size: 9px; font-weight: 800; cursor: pointer; }
+.avatar-upload-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .account-summary { display: grid; gap: 0; margin: 5px 0 18px; }
 .account-summary div { padding: 12px 0; border-top: 1px solid var(--line); }
 .account-summary dt { color: #8b979e; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
@@ -700,6 +707,32 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .role-matrix strong, .role-matrix small { display: block; }
 .role-matrix strong { color: #405560; font-size: 10px; }
 .role-matrix small { margin-top: 4px; color: #89959b; font-size: 8px; }
+.topbar-actions { position: relative; z-index: 3; }
+.governance-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, .55fr); gap: 15px; margin-bottom: 15px; }
+.account-role-list { display: grid; max-height: 540px; overflow: auto; }
+.account-role-list > div { display: grid; grid-template-columns: 38px minmax(190px, 1fr) minmax(290px, auto); align-items: center; gap: 11px; padding: 12px 0; border-top: 1px solid #edf0f1; }
+.account-role-list strong, .account-role-list small { display: block; }
+.account-role-list strong { color: #3b505c; font-size: 10px; }
+.account-role-list small { margin-top: 4px; color: #8a969d; font-size: 8px; }
+.role-control { display: grid; grid-template-columns: minmax(155px, 1fr) auto; gap: 7px; align-items: center; }
+.role-control select { height: 36px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: white; color: #536570; font-size: 9px; }
+.role-control button { height: 36px; padding: 0 11px; font-size: 9px; }
+.role-control small { grid-column: 1 / -1; color: var(--teal-dark); text-align: right; }
+.health-list { display: grid; }
+.health-list > span { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 10px; padding: 15px 0; border-top: 1px solid #edf0f1; }
+.health-list i { width: 8px; height: 8px; border-radius: 50%; }
+.health-ok { background: #22a776; box-shadow: 0 0 0 4px #e4f6ef; }
+.health-alert { background: #d75a4b; box-shadow: 0 0 0 4px #fcebe8; }
+.health-list strong, .health-list small { display: block; }
+.health-list strong { color: #405560; font-size: 10px; }
+.health-list small { margin-top: 4px; color: #88959c; font-size: 8px; }
+.health-list b { color: #5d6f79; font-size: 8px; }
+.audit-list { display: grid; }
+.audit-list > div { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid #edf0f1; }
+.audit-list strong, .audit-list small { display: block; }
+.audit-list strong { color: #405560; font-size: 10px; }
+.audit-list small { margin-top: 4px; color: #87949b; font-size: 8px; }
+.audit-list time { color: #929da3; font-size: 8px; }
 
 @media (max-width: 1180px) {
   .topbar-brand { display: none; }
@@ -707,13 +740,19 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .admin-catalogue-toolbar { grid-template-columns: minmax(240px, 1fr) 180px 240px; }
   .admin-catalogue-toolbar > span { grid-column: 1 / -1; }
   .learner-profile-metrics { grid-template-columns: repeat(2, 1fr); }
+  .governance-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
-  .topbar-brand { display: block; }
-  .topbar-brand .brand-logo-shell { width: 155px; height: 52px; }
-  .topbar-brand .brand-logo-image { width: 174px !important; height: 174px !important; }
+  .topbar { display: grid; grid-template-columns: 38px minmax(120px, 1fr) auto; gap: 6px; padding: 0 10px; }
+  .mobile-menu { margin-right: 0; }
+  .topbar-brand { position: static; display: block; justify-self: center; transform: none; }
+  .topbar-brand .brand-logo-shell { width: 138px; height: 50px; }
+  .topbar-brand .brand-logo-image { width: 156px !important; height: 156px !important; }
   .topbar .global-search { display: none; }
+  .topbar-actions { gap: 5px; margin-left: 0; }
+  .profile-chip { gap: 5px; padding-left: 0; border-left: 0; }
+  .notification-button { width: 38px; height: 38px; }
   .catalogue-insights, .master-catalogue-grid, .learner-profile-metrics, .learner-profile-grid, .superadmin-card { grid-template-columns: 1fr; }
   .admin-catalogue-toolbar { display: flex; flex-direction: column; align-items: stretch; }
   .learner-profile-hero { align-items: flex-start; flex-direction: column; }
@@ -724,4 +763,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .record-progress { max-width: 280px; }
   .catalogue-detail > footer { align-items: flex-start; flex-direction: column; }
   .catalogue-detail > footer button { width: 100%; }
+  .account-role-list > div { grid-template-columns: 38px 1fr; }
+  .role-control { grid-column: 1 / -1; }
+  .audit-list > div { grid-template-columns: 10px 1fr; }
+  .audit-list time { grid-column: 2; }
+}
+
+@media (max-width: 420px) {
+  .topbar { grid-template-columns: 38px minmax(105px, 1fr) auto; }
+  .profile-chip .user-avatar { display: none; }
+  .topbar-brand .brand-logo-shell { width: 124px; }
+  .topbar-brand .brand-logo-image { width: 144px !important; height: 144px !important; }
 }
