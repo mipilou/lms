@@ -3,18 +3,63 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
-  ArrowLeft, Award, Bell, BookOpen, CalendarDays, Check, CheckCircle2,
+  ArrowLeft, Award, Bell, BookOpen, Check, CheckCircle2,
   ChevronDown, ChevronRight, Circle, CircleHelp, ClipboardCheck, Clock3, Download,
-  Edit3, ExternalLink, FileQuestion, FileText, FileUp, Filter, LayoutDashboard,
+  Edit3, ExternalLink, Eye, EyeOff, FileQuestion, FileText, FileUp, Filter, Inbox, LayoutDashboard,
   LibraryBig, Link2, LockKeyhole, LogOut, Menu, MoreHorizontal, Play, Plus,
   Save, Search, Send, Settings, ShieldCheck, Sparkles, Trash2, TrendingUp,
   UploadCloud, UserPlus, UserRound, UsersRound, Video, X,
 } from "lucide-react";
-import { courses, learners, recentActivities, type Course } from "./data";
+import {
+  catalogueTotals, courses, readyCourseByCode, trainingCatalogue,
+  type CatalogCourse, type Course, type Learner,
+} from "./data";
 
-type Role = "learner" | "admin";
-type View = "dashboard" | "catalogue" | "certificates" | "users" | "trainings" | "quizzes" | "activity" | "settings";
-type Session = { name: string; email: string; initials: string; role: Role; isDemo: boolean };
+export type Role = "learner" | "admin" | "super_admin";
+type View = "dashboard" | "catalogue" | "catalog" | "certificates" | "users" | "trainings" | "quizzes" | "activity" | "settings";
+export type Session = { name: string; email: string; initials: string; role: Role; authProvider: "netlify" | "sites" };
+
+type CertificateRecord = {
+  certificateNumber: string;
+  courseId: string;
+  courseCode: string;
+  courseTitle: string;
+  score: number | null;
+  issuedAt: string;
+};
+
+type ActivityRecord = { type: string; summary: string; occurredAt: string };
+type LearnerProfile = { fullName: string; email: string; department: string; jobTitle: string };
+type LearnerWorkspace = {
+  loading: boolean;
+  error: string;
+  courses: Course[];
+  certificates: CertificateRecord[];
+  activity: ActivityRecord[];
+  profile: LearnerProfile | null;
+};
+
+type AdminActivity = { name: string; initials: string; summary: string; detail: string; occurredAt: string };
+type AdminSnapshot = {
+  learners: number;
+  publishedCourses: number;
+  certificates: number;
+  loginsToday: number;
+  overdue: number;
+  completedEnrollments: number;
+  inProgressEnrollments: number;
+  assignedEnrollments: number;
+  completionRate: number;
+  inactiveUsers: number;
+  activities: AdminActivity[];
+  loginSeries: number[];
+};
+
+const EMPTY_ADMIN: AdminSnapshot = {
+  learners: 0, publishedCourses: 0, certificates: 0, loginsToday: 0, overdue: 0,
+  completedEnrollments: 0, inProgressEnrollments: 0, assignedEnrollments: 0,
+  completionRate: 0, inactiveUsers: 0, activities: [], loginSeries: [0, 0, 0, 0, 0, 0, 0],
+};
 
 const learnerNav: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Mon tableau de bord", icon: LayoutDashboard },
@@ -27,6 +72,7 @@ const adminNav: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Vue d’ensemble", icon: LayoutDashboard },
   { id: "users", label: "Apprenants", icon: UsersRound },
   { id: "trainings", label: "Formations", icon: LibraryBig },
+  { id: "catalog", label: "Catalogues 2026", icon: BookOpen },
   { id: "quizzes", label: "QCM & évaluations", icon: ClipboardCheck },
   { id: "activity", label: "Connexions", icon: TrendingUp },
   { id: "settings", label: "Paramètres", icon: Settings },
@@ -55,12 +101,111 @@ const quizQuestions = [
   },
 ];
 
+function moduleDraft(title: string): Course["moduleContent"][number] {
+  return { title: `Introduction · ${title}`, type: "lesson", duration: "15 min", summary: "Présenter les objectifs, les attendus et le déroulé du parcours.", points: ["Comprendre les objectifs", "Identifier les acquis attendus", "Préparer la mise en pratique"] };
+}
+
 function Modal({ title, children, onClose, wide = false }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
   return <div className="modal-layer" role="dialog" aria-modal="true" aria-label={title}><button className="modal-backdrop" aria-label="Fermer" onClick={onClose} /><section className={`modal-card ${wide ? "modal-wide" : ""}`}><header><div><span className="eyebrow">Walyah Académie</span><h2>{title}</h2></div><button className="icon-button" aria-label="Fermer" onClick={onClose}><X size={20} /></button></header>{children}</section></div>;
 }
 
 function initialsFrom(name: string) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+}
+
+function roleFromClaims(roles: string[] | undefined): Role {
+  if (roles?.includes("super_admin")) return "super_admin";
+  if (roles?.includes("admin")) return "admin";
+  return "learner";
+}
+
+function roleLabel(role: Role) {
+  if (role === "super_admin") return "Super-administrateur";
+  if (role === "admin") return "Administrateur";
+  return "Apprenant";
+}
+
+function formatDuration(minutes: number) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "Durée à définir";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  return remaining ? `${hours} h ${String(remaining).padStart(2, "0")}` : `${hours} h`;
+}
+
+function formatDate(value: unknown, fallback = "Non renseignée") {
+  if (!value) return fallback;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? fallback : date.toLocaleDateString("fr-FR");
+}
+
+function formatDateTime(value: unknown) {
+  if (!value) return "Jamais";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "Jamais";
+  return `${date.toLocaleDateString("fr-FR")} · ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function moduleType(value: unknown): Course["moduleContent"][number]["type"] {
+  const type = String(value ?? "text");
+  if (type === "video" || type === "document" || type === "quiz") return type;
+  return "lesson";
+}
+
+function parseModulePayload(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) return value as Array<Record<string, unknown>>;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed as Array<Record<string, unknown>> : [];
+  } catch {
+    return [];
+  }
+}
+
+function courseFromRow(row: Record<string, unknown>): Course {
+  const id = String(row.id ?? `course-${String(row.code ?? "unknown")}`);
+  const template = courses.find((item) => item.id === id || item.code === String(row.code ?? ""));
+  const payload = parseModulePayload(row.module_content);
+  const moduleContent = payload.length ? payload.map((module, index) => {
+    const objectives = Array.isArray(module.learning_objectives) ? module.learning_objectives.map(String) : [];
+    const resources = Array.isArray(module.resources) ? (module.resources as Array<Record<string, unknown>>).map((resource) => ({ name: String(resource.name ?? "Ressource"), type: String(resource.resource_type ?? "file"), url: resource.external_url ? String(resource.external_url) : undefined })) : [];
+    return {
+      id: String(module.id ?? `${id}-module-${index + 1}`),
+      title: String(module.title ?? `Module ${index + 1}`),
+      type: moduleType(module.content_type),
+      duration: formatDuration(Number(module.duration_minutes ?? 0)),
+      summary: String(module.description ?? "Contenu pédagogique en préparation."),
+      points: objectives,
+      videoUrl: module.video_url ? String(module.video_url) : undefined,
+      resources,
+    };
+  }) : (template?.moduleContent ?? []);
+  const rawStatus = String(row.enrollment_status ?? "assigned");
+  const status: Course["status"] = rawStatus === "completed" ? "Terminée" : rawStatus === "in_progress" ? "En cours" : "À commencer";
+  const completedModules = Number(row.completed_modules ?? 0);
+  const progress = Number(row.progress_percent ?? 0);
+  const durationMinutes = Number(row.duration_minutes ?? 0);
+  return {
+    id,
+    code: String(row.code ?? template?.code ?? "WA"),
+    title: String(row.title ?? template?.title ?? "Formation"),
+    category: String(row.category ?? template?.category ?? "Formation"),
+    description: String(row.description ?? template?.description ?? ""),
+    objective: String(row.objective ?? template?.objective ?? ""),
+    audience: String(row.audience ?? template?.audience ?? ""),
+    source: String(row.source_catalog ?? template?.source ?? "Walyah Académie"),
+    duration: durationMinutes ? formatDuration(durationMinutes) : (template?.duration ?? "Durée à définir"),
+    modules: Number(row.module_count ?? moduleContent.length),
+    completedModules,
+    progress,
+    status,
+    mandatory: Boolean(row.mandatory ?? template?.mandatory),
+    accent: template?.accent ?? (["teal", "blue", "violet", "amber", "coral"] as const)[id.length % 5],
+    nextLesson: moduleContent[Math.min(completedModules, Math.max(moduleContent.length - 1, 0))]?.title ?? "Contenu à venir",
+    dueDate: row.due_at ? formatDate(row.due_at) : undefined,
+    moduleContent,
+  };
 }
 
 function usesNetlifyIdentity() {
@@ -78,18 +223,10 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showSignup, setShowSignup] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const authenticateDemo = (role: Role) => {
-    const name = role === "admin" ? "Yohann Mouity" : "Arielle Ndong";
-    onAuthenticated({
-      name,
-      email: role === "admin" ? "admin@walyah-academie.com" : "arielle.ndong@walyah-academie.com",
-      initials: initialsFrom(name), role, isDemo: true,
-    });
-  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,19 +235,46 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
     try {
       const isNetlify = usesNetlifyIdentity();
       if (!isNetlify) {
-        const role: Role = email.toLowerCase().includes("admin") ? "admin" : "learner";
-        const name = fullName || (role === "admin" ? "Administrateur CDL" : email.split("@")[0] || "Apprenant CDL");
-        onAuthenticated({ name, email: email || (role === "admin" ? "admin@walyah-academie.com" : "apprenant@walyah-academie.com"), initials: initialsFrom(name), role, isDemo: true });
+        setMessage("La connexion sécurisée sera active sur votre domaine Netlify.");
         return;
       }
       const identity = await import("@netlify/identity");
-      const user = showSignup ? await identity.signup(email, password, { full_name: fullName }) : await identity.login(email, password);
-      const candidate = user as unknown as { email?: string; roles?: string[]; userMetadata?: { fullName?: string; full_name?: string }; user_metadata?: { full_name?: string } };
-      const name = candidate.userMetadata?.fullName || candidate.userMetadata?.full_name || candidate.user_metadata?.full_name || fullName || candidate.email || "Apprenant";
-      const role: Role = candidate.roles?.includes("admin") ? "admin" : "learner";
-      onAuthenticated({ name, email: candidate.email || email, initials: initialsFrom(name), role, isDemo: false });
+      const createdOrLogged = showSignup ? await identity.signup(email.trim().toLowerCase(), password, { full_name: fullName.trim() }) : await identity.login(email.trim().toLowerCase(), password);
+      const authenticated = showSignup ? await identity.getUser() : createdOrLogged;
+      if (showSignup && !authenticated) {
+        setShowSignup(false);
+        setPassword("");
+        setMessage("Compte créé. Consultez votre e-mail pour confirmer votre adresse, puis connectez-vous.");
+        return;
+      }
+      const candidate = authenticated as unknown as { email?: string; name?: string; roles?: string[]; userMetadata?: Record<string, unknown> };
+      const name = candidate.name || String(candidate.userMetadata?.full_name ?? "") || fullName.trim() || candidate.email || "Apprenant";
+      const role = roleFromClaims(candidate.roles);
+      onAuthenticated({ name, email: candidate.email || email, initials: initialsFrom(name), role, authProvider: "netlify" });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Connexion impossible. Vérifiez vos informations.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const recoverPassword = async () => {
+    setMessage("");
+    if (!email.trim()) {
+      setMessage("Saisissez d’abord votre adresse e-mail.");
+      return;
+    }
+    if (!usesNetlifyIdentity()) {
+      setMessage("La récupération du mot de passe sera active sur votre domaine Netlify.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const identity = await import("@netlify/identity");
+      await identity.requestPasswordRecovery(email.trim().toLowerCase());
+      setMessage("Un e-mail de réinitialisation vient de vous être envoyé.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Envoi impossible.");
     } finally {
       setLoading(false);
     }
@@ -125,9 +289,8 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
           <span className="eyebrow eyebrow-light"><Sparkles size={14} /> Développer les compétences, simplement</span>
           <h1>La formation qui fait avancer toute votre équipe.</h1>
           <p>Centralisez les parcours, suivez les progrès et accompagnez chaque collaborateur depuis une seule plateforme claire et engageante.</p>
-          <div className="auth-proof-grid"><div><strong>92 %</strong><span>de complétion moyenne</span></div><div><strong>24/7</strong><span>accès aux contenus</span></div><div><strong>1 espace</strong><span>pour tout piloter</span></div></div>
+          <div className="auth-proof-grid"><div><strong>Affectations ciblées</strong><span>Chaque apprenant reçoit uniquement les parcours choisis.</span></div><div><strong>Suivi vérifiable</strong><span>Progression, résultats et connexions sont consolidés.</span></div><div><strong>Passeport connecté</strong><span>Les acquis peuvent être synchronisés entre les deux outils.</span></div></div>
         </div>
-        <div className="auth-quote"><div className="quote-avatar">AN</div><div><p>« Je retrouve immédiatement le module à poursuivre et mes résultats. »</p><span>Arielle · Équipe accueil</span></div></div>
       </section>
 
       <section className="auth-panel">
@@ -137,13 +300,11 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
           <form onSubmit={submit}>
             {showSignup && <label className="field-label">Nom complet<span className="input-wrap"><UserRound size={18} /><input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Votre nom et prénom" required /></span></label>}
             <label className="field-label">Adresse e-mail<span className="input-wrap"><span className="at-icon">@</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom.nom@walyah-academie.com" required /></span></label>
-            <label className="field-label"><span className="label-row"><span>Mot de passe</span><button type="button" className="text-button">Mot de passe oublié ?</button></span><span className="input-wrap"><LockKeyhole size={18} /><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8 caractères minimum" minLength={8} required /></span></label>
+            <label className="field-label"><span className="label-row"><span>Mot de passe</span><button type="button" className="text-button" onClick={recoverPassword} disabled={loading}>Mot de passe oublié ?</button></span><span className="input-wrap"><LockKeyhole size={18} /><input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8 caractères minimum" minLength={8} required /><button className="password-toggle" type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
             {message && <p className="form-message" role="alert">{message}</p>}
-            <button className="primary-button auth-submit" type="submit" disabled={loading}>{loading ? "Connexion…" : showSignup ? "Créer mon compte" : "Se connecter"}<ChevronRight size={18} /></button>
+            <button className="primary-button auth-submit" type="submit" disabled={loading}>{loading ? "Traitement…" : showSignup ? "Créer mon compte" : "Se connecter"}<ChevronRight size={18} /></button>
           </form>
-          <p className="auth-switch">{showSignup ? "Vous avez déjà un compte ?" : "Première connexion ?"} <button type="button" className="text-button strong" onClick={() => setShowSignup(!showSignup)}>{showSignup ? "Se connecter" : "Créer un compte"}</button></p>
-          <div className="demo-divider"><span>Accès de démonstration</span></div>
-          <div className="demo-actions"><button type="button" className="secondary-button" onClick={() => authenticateDemo("learner")}><BookOpen size={17} /> Espace apprenant</button><button type="button" className="secondary-button" onClick={() => authenticateDemo("admin")}><ShieldCheck size={17} /> Espace admin</button></div>
+          <p className="auth-switch">{showSignup ? "Vous avez déjà un compte ?" : "Première connexion ?"} <button type="button" className="text-button strong" onClick={() => { setShowSignup(!showSignup); setMessage(""); setPassword(""); }}>{showSignup ? "Se connecter" : "Créer un compte"}</button></p>
           <div className="trust-note"><ShieldCheck size={17} /><span>Vos données et vos résultats sont protégés.</span></div>
         </div>
         <p className="auth-footer">© 2026 Walyah Académie · Confidentialité · Assistance</p>
@@ -152,17 +313,17 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) =
   );
 }
 
-function Brand({ light = false }: { light?: boolean }) {
-  return <div className={`brand brand-logo ${light ? "brand-light" : ""}`}><span className="brand-logo-shell"><Image src="/walyah-logo.png" alt="Walyah Académie" width={204} height={70} priority /></span></div>;
+function Brand({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
+  return <div className={`brand brand-logo ${light ? "brand-light" : ""} ${compact ? "brand-compact" : ""}`}><span className="brand-logo-shell"><Image className="brand-logo-image" src="/walyah-logo-transparent.png" alt="Walyah Académie" width={2048} height={2048} priority /></span></div>;
 }
 
 function Sidebar({ role, view, onView, open, onClose }: { role: Role; view: View; onView: (view: View) => void; open: boolean; onClose: () => void }) {
-  const nav = role === "admin" ? adminNav : learnerNav;
+  const nav = role === "learner" ? learnerNav : adminNav;
   return <>
     {open && <button className="sidebar-backdrop" aria-label="Fermer le menu" onClick={onClose} />}
     <aside className={`sidebar ${open ? "is-open" : ""}`}>
       <div className="sidebar-top"><Brand /><button className="icon-button close-sidebar" aria-label="Fermer le menu" onClick={onClose}><X size={20} /></button></div>
-      <div className="workspace-badge"><span className="workspace-icon">WA</span><span><small>Espace</small><strong>{role === "admin" ? "Administration" : "Apprenant"}</strong></span><ChevronDown size={16} /></div>
+      <div className="workspace-badge"><span className="workspace-icon">WA</span><span><small>Espace sécurisé</small><strong>{roleLabel(role)}</strong></span><ChevronDown size={16} /></div>
       <nav className="sidebar-nav" aria-label="Navigation principale"><span className="nav-label">Navigation</span>{nav.map((item) => { const Icon = item.icon; return <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => { onView(item.id); onClose(); }}><Icon size={19} strokeWidth={1.9} /><span>{item.label}</span></button>; })}</nav>
       <div className="sidebar-support"><div className="support-icon"><CircleHelp size={20} /></div><strong>Besoin d’aide ?</strong><p>Notre équipe vous accompagne.</p><button>Contacter le support</button></div>
       <div className="sidebar-version"><span className="online-dot" /> Services opérationnels <small>v1.0</small></div>
@@ -173,8 +334,9 @@ function Sidebar({ role, view, onView, open, onClose }: { role: Role; view: View
 function Topbar({ session, onMenu, onLogout }: { session: Session; onMenu: () => void; onLogout: () => void }) {
   return <header className="topbar">
     <button className="icon-button mobile-menu" aria-label="Ouvrir le menu" onClick={onMenu}><Menu size={21} /></button>
-    <div className="global-search"><Search size={18} /><input aria-label="Rechercher" placeholder={session.role === "admin" ? "Rechercher un apprenant, une formation…" : "Rechercher une formation…"} /><kbd>⌘ K</kbd></div>
-    <div className="topbar-actions">{session.isDemo && <span className="demo-badge">Mode démo</span>}<button className="icon-button notification-button" aria-label="Notifications"><Bell size={20} /><span /></button><div className="profile-chip"><span className="avatar avatar-dark">{session.initials}</span><span className="profile-copy"><strong>{session.name}</strong><small>{session.role === "admin" ? "Administrateur" : "Apprenante"}</small></span><button className="icon-button" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout}><LogOut size={18} /></button></div></div>
+    <div className="global-search"><Search size={18} /><input aria-label="Rechercher" placeholder={session.role === "learner" ? "Rechercher une formation…" : "Rechercher un apprenant, une formation…"} /><kbd>⌘ K</kbd></div>
+    <div className="topbar-brand"><Brand compact /></div>
+    <div className="topbar-actions"><button className="icon-button notification-button" aria-label="Notifications"><Bell size={20} /><span /></button><div className="profile-chip"><span className="avatar avatar-dark">{session.initials}</span><span className="profile-copy"><strong>{session.name}</strong><small>{roleLabel(session.role)}</small></span><button className="icon-button" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout}><LogOut size={18} /></button></div></div>
   </header>;
 }
 
@@ -190,44 +352,78 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: (course: Cours
   return <article className="course-card"><CourseVisual course={course} compact /><div className="course-card-body"><div className="course-card-meta"><span><Clock3 size={14} /> {course.duration}</span><span>{course.modules} modules</span></div><h3>{course.title}</h3><p>{course.description}</p><div className="progress-row"><span>Progression</span><strong>{course.progress}%</strong></div><div className="linear-progress"><span style={{ width: `${course.progress}%` }} /></div><button className={course.progress === 100 ? "card-button completed" : "card-button"} onClick={() => onOpen(course)}>{course.progress === 100 ? <><CheckCircle2 size={17} /> Revoir la formation</> : course.progress > 0 ? <><Play size={16} fill="currentColor" /> Continuer</> : <>Commencer <ChevronRight size={17} /></>}</button></div></article>;
 }
 
-function LearnerDashboard({ onView, onCourse }: { onView: (view: View) => void; onCourse: (course: Course) => void }) {
-  const activeCourses = courses.filter((course) => course.status !== "Terminée");
+function LearnerDashboard({ name, workspace, onView, onCourse }: { name: string; workspace: LearnerWorkspace; onView: (view: View) => void; onCourse: (course: Course) => void }) {
+  const firstName = name.split(" ").filter(Boolean)[0] || "à vous";
+  const dateLabel = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+  if (workspace.loading) return <section className="empty-state"><span className="empty-icon"><Clock3 size={30} /></span><h1>Chargement de votre espace…</h1><p>Nous vérifions les formations qui vous ont été attribuées.</p></section>;
+  if (workspace.courses.length === 0) return <>
+    <section className="page-heading learner-heading"><div><span className="eyebrow">{dateLabel}</span><h1>Bonjour {firstName} <span>👋</span></h1><p>Bienvenue dans votre espace personnel de formation.</p></div></section>
+    {workspace.error && <div className="form-message" role="alert">{workspace.error}</div>}
+    <section className="panel learner-empty-state"><span className="empty-icon"><Inbox size={30} /></span><span className="eyebrow">Espace prêt</span><h2>Aucune formation ne vous a encore été assignée</h2><p>Votre administrateur ajoutera progressivement les modules adaptés à votre parcours. Ils apparaîtront ici automatiquement.</p><div className="empty-state-metrics"><span><strong>0</strong> formation assignée</span><span><strong>0</strong> certificat</span><span><strong>0 %</strong> de progression</span></div></section>
+  </>;
+  const activeCourses = workspace.courses.filter((course) => course.status !== "Terminée");
+  const nextCourse = activeCourses[0] ?? workspace.courses[0];
+  const completed = workspace.courses.filter((course) => course.status === "Terminée").length;
+  const globalProgress = workspace.courses.length ? Math.round(workspace.courses.reduce((total, course) => total + course.progress, 0) / workspace.courses.length) : 0;
   return <>
-    <section className="page-heading learner-heading"><div><span className="eyebrow">Jeudi 20 août 2026</span><h1>Bonjour Arielle <span>👋</span></h1><p>Prête à poursuivre votre progression ? Vous êtes sur une belle lancée.</p></div><button className="secondary-button"><CalendarDays size={17} /> Mon calendrier</button></section>
-    <section className="learner-hero"><div className="hero-copy"><span className="eyebrow eyebrow-light"><Sparkles size={14} /> À poursuivre aujourd’hui</span><h2>Hygiène des mains & prévention des infections</h2><p>Module 6 · Précautions standard</p><div className="hero-progress"><div><span style={{ width: "65%" }} /></div><strong>65 %</strong></div><button className="light-button" onClick={() => onCourse(courses[0])}><Play size={17} fill="currentColor" /> Reprendre le cours</button></div><div className="hero-orbit" aria-hidden="true"><span className="orbit orbit-one" /><span className="orbit orbit-two" /><span className="hero-emblem"><ShieldCheck size={52} strokeWidth={1.5} /></span><span className="float-card float-card-one"><CheckCircle2 size={18} /> 5 modules validés</span><span className="float-card float-card-two"><Clock3 size={18} /> 42 min restantes</span></div></section>
+    <section className="page-heading learner-heading"><div><span className="eyebrow">{dateLabel}</span><h1>Bonjour {firstName} <span>👋</span></h1><p>Retrouvez uniquement les parcours qui vous ont été assignés.</p></div></section>
+    <section className="learner-hero"><div className="hero-copy"><span className="eyebrow eyebrow-light"><Sparkles size={14} /> {nextCourse.progress > 0 ? "À poursuivre" : "Prochaine formation"}</span><h2>{nextCourse.title}</h2><p>{nextCourse.nextLesson}</p><div className="hero-progress"><div><span style={{ width: `${nextCourse.progress}%` }} /></div><strong>{nextCourse.progress} %</strong></div><button className="light-button" onClick={() => onCourse(nextCourse)}><Play size={17} fill="currentColor" /> {nextCourse.progress > 0 ? "Reprendre le cours" : "Commencer"}</button></div><div className="hero-orbit" aria-hidden="true"><span className="orbit orbit-one" /><span className="orbit orbit-two" /><span className="hero-emblem"><ShieldCheck size={52} strokeWidth={1.5} /></span><span className="float-card float-card-one"><CheckCircle2 size={18} /> {nextCourse.completedModules} module{nextCourse.completedModules > 1 ? "s" : ""} validé{nextCourse.completedModules > 1 ? "s" : ""}</span><span className="float-card float-card-two"><Clock3 size={18} /> {nextCourse.modules} modules au total</span></div></section>
     <section className="metric-grid learner-metrics">
-      <article className="metric-card"><div className="metric-icon tone-teal-soft"><TrendingUp size={21} /></div><div><span>Progression globale</span><strong>68 %</strong><small className="positive">+12 % ce mois</small></div><ProgressRing value={68} size={58} /></article>
-      <article className="metric-card"><div className="metric-icon tone-blue-soft"><BookOpen size={21} /></div><div><span>Formations en cours</span><strong>4</strong><small>sur 7 assignées</small></div></article>
-      <article className="metric-card"><div className="metric-icon tone-violet-soft"><Award size={21} /></div><div><span>Certificats obtenus</span><strong>3</strong><small>dont 1 ce mois-ci</small></div></article>
-      <article className="metric-card"><div className="metric-icon tone-coral-soft"><ClipboardCheck size={21} /></div><div><span>Prochaine échéance</span><strong className="date-metric">28 août</strong><small>QCM obligatoire</small></div></article>
+      <article className="metric-card"><div className="metric-icon tone-teal-soft"><TrendingUp size={21} /></div><div><span>Progression globale</span><strong>{globalProgress} %</strong><small>Calculée sur vos affectations</small></div><ProgressRing value={globalProgress} size={58} /></article>
+      <article className="metric-card"><div className="metric-icon tone-blue-soft"><BookOpen size={21} /></div><div><span>Formations en cours</span><strong>{activeCourses.length}</strong><small>sur {workspace.courses.length} assignée{workspace.courses.length > 1 ? "s" : ""}</small></div></article>
+      <article className="metric-card"><div className="metric-icon tone-violet-soft"><Award size={21} /></div><div><span>Certificats obtenus</span><strong>{workspace.certificates.length}</strong><small>{completed} parcours terminé{completed > 1 ? "s" : ""}</small></div></article>
+      <article className="metric-card"><div className="metric-icon tone-coral-soft"><ClipboardCheck size={21} /></div><div><span>Prochaine échéance</span><strong className="date-metric">{nextCourse.dueDate ?? "Non définie"}</strong><small>{nextCourse.code}</small></div></article>
     </section>
     <section className="content-section"><div className="section-heading"><div><span className="eyebrow">Votre parcours</span><h2>Formations en cours</h2></div><button className="text-button strong" onClick={() => onView("catalogue")}>Voir toutes les formations <ChevronRight size={16} /></button></div><div className="course-grid">{activeCourses.slice(0, 3).map((course) => <CourseCard key={course.id} course={course} onOpen={onCourse} />)}</div></section>
-    <section className="bottom-grid"><article className="panel next-session"><div className="panel-heading"><div><span className="eyebrow">À venir</span><h3>Prochaine session</h3></div><button className="icon-button"><ChevronRight size={18} /></button></div><div className="session-card"><div className="date-card"><strong>26</strong><span>AOÛT</span></div><div><h4>Accueil et relation patient</h4><p><Clock3 size={15} /> 09:00 – 11:00 · Salle Akanda</p><span className="seat-badge">12 places disponibles</span></div></div></article><article className="panel recent-panel"><div className="panel-heading"><div><span className="eyebrow">Derniers jours</span><h3>Votre activité</h3></div><button className="text-button">Tout voir</button></div><ul className="learner-activity"><li><span className="activity-dot teal" /><div><strong>QCM validé à 90 %</strong><span>Communication patient · Hier</span></div></li><li><span className="activity-dot violet" /><div><strong>Certificat obtenu</strong><span>Confidentialité des données · 18 août</span></div></li></ul></article></section>
+    <section className="panel recent-panel"><div className="panel-heading"><div><span className="eyebrow">Traçabilité</span><h3>Votre activité récente</h3></div></div>{workspace.activity.length ? <ul className="learner-activity">{workspace.activity.slice(0, 5).map((activity, index) => <li key={`${activity.occurredAt}-${index}`}><span className={`activity-dot ${index % 2 ? "violet" : "teal"}`} /><div><strong>{activity.summary}</strong><span>{formatDateTime(activity.occurredAt)}</span></div></li>)}</ul> : <div className="table-empty"><Clock3 size={22} /><strong>Aucune activité enregistrée</strong><span>Votre historique apparaîtra après le début d’une formation.</span></div>}</section>
   </>;
 }
 
 function AdminDashboard({ onView }: { onView: (view: View) => void }) {
+  const [metrics, setMetrics] = useState<AdminSnapshot>(EMPTY_ADMIN);
+  const [loading, setLoading] = useState(() => usesNetlifyIdentity());
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (!usesNetlifyIdentity()) return;
+    void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { totals?: Record<string, number>; recentActivity?: Array<Record<string, unknown>>; dailyLogins?: Array<Record<string, unknown>> }) => {
+      const totals = data.totals ?? {};
+      const loginMap = new Map((data.dailyLogins ?? []).map((item) => [String(item.day), Number(item.count ?? 0)]));
+      const loginSeries = Array.from({ length: 7 }, (_, offset) => {
+        const day = new Date(); day.setDate(day.getDate() - (6 - offset));
+        return loginMap.get(day.toISOString().slice(0, 10)) ?? 0;
+      });
+      setMetrics({
+        learners: Number(totals.learners ?? 0), publishedCourses: Number(totals.published_courses ?? 0), certificates: Number(totals.certificates ?? 0),
+        loginsToday: Number(totals.logins_today ?? 0), overdue: Number(totals.overdue ?? 0), completedEnrollments: Number(totals.completed_enrollments ?? 0),
+        inProgressEnrollments: Number(totals.in_progress_enrollments ?? 0), assignedEnrollments: Number(totals.assigned_enrollments ?? 0),
+        completionRate: Number(totals.completion_rate ?? 0), inactiveUsers: Number(totals.inactive_users ?? 0), loginSeries,
+        activities: (data.recentActivity ?? []).map((item) => { const name = String(item.full_name ?? item.email ?? "Utilisateur"); return { name, initials: initialsFrom(name), summary: String(item.summary ?? "Activité enregistrée"), detail: String(item.entity_title ?? item.event_type ?? ""), occurredAt: String(item.occurred_at ?? "") }; }),
+      });
+    }).catch(() => { setMetrics(EMPTY_ADMIN); setLoadError("Les indicateurs n’ont pas pu être chargés depuis la base Netlify."); }).finally(() => setLoading(false));
+  }, []);
+  const maxLogins = Math.max(...metrics.loginSeries, 1);
   return <>
     <section className="page-heading"><div><span className="eyebrow">Pilotage de la formation</span><h1>Vue d’ensemble</h1><p>Suivez l’engagement de vos équipes et agissez au bon moment.</p></div><div className="heading-actions"><button className="secondary-button"><UploadCloud size={17} /> Importer</button><button className="primary-button" onClick={() => onView("trainings")}><BookOpen size={17} /> Nouvelle formation</button></div></section>
+    {loadError && <div className="form-message" role="alert">{loadError}</div>}
     <section className="metric-grid admin-metrics">
-      <article className="metric-card admin-card"><div className="metric-icon tone-teal-soft"><UsersRound size={21} /></div><div><span>Apprenants actifs</span><strong>128</strong><small className="positive">+8 ce mois</small></div><span className="mini-label">sur 142</span></article>
-      <article className="metric-card admin-card"><div className="metric-icon tone-blue-soft"><TrendingUp size={21} /></div><div><span>Taux de complétion</span><strong>72 %</strong><small className="positive">+6 % vs juillet</small></div></article>
-      <article className="metric-card admin-card"><div className="metric-icon tone-violet-soft"><Award size={21} /></div><div><span>Certificats délivrés</span><strong>346</strong><small>42 ce mois-ci</small></div></article>
-      <article className="metric-card admin-card"><div className="metric-icon tone-coral-soft"><CircleHelp size={21} /></div><div><span>À relancer</span><strong>14</strong><small className="warning">Sans activité depuis 7 j</small></div></article>
+      <article className="metric-card admin-card"><div className="metric-icon tone-teal-soft"><UsersRound size={21} /></div><div><span>Apprenants inscrits</span><strong>{loading ? "…" : metrics.learners}</strong><small>Comptes réels dans la base</small></div><span className="mini-label">{metrics.publishedCourses} parcours publiés</span></article>
+      <article className="metric-card admin-card"><div className="metric-icon tone-blue-soft"><TrendingUp size={21} /></div><div><span>Taux de complétion</span><strong>{metrics.completionRate} %</strong><small>Sur les affectations réelles</small></div></article>
+      <article className="metric-card admin-card"><div className="metric-icon tone-violet-soft"><Award size={21} /></div><div><span>Certificats délivrés</span><strong>{metrics.certificates}</strong><small>Historique consolidé</small></div></article>
+      <article className="metric-card admin-card"><div className="metric-icon tone-coral-soft"><CircleHelp size={21} /></div><div><span>À relancer</span><strong>{metrics.overdue}</strong><small className="warning">Échéance dépassée</small></div></article>
     </section>
     <section className="admin-main-grid">
-      <article className="panel completion-panel"><div className="panel-heading"><div><span className="eyebrow">Progression</span><h3>Niveau d’avancement</h3></div><select aria-label="Période"><option>30 derniers jours</option><option>90 derniers jours</option></select></div><div className="completion-layout"><div className="big-progress"><ProgressRing value={72} size={150} /><span>Taux moyen</span></div><div className="completion-breakdown"><div><span><i className="key-dot complete" /> Terminées</span><strong>58</strong><small>41 %</small></div><div><span><i className="key-dot current" /> En cours</span><strong>67</strong><small>47 %</small></div><div><span><i className="key-dot late" /> En retard</span><strong>17</strong><small>12 %</small></div></div></div><button className="secondary-button full-button" onClick={() => onView("users")}>Consulter le suivi détaillé <ChevronRight size={16} /></button></article>
-      <article className="panel engagement-panel"><div className="panel-heading"><div><span className="eyebrow">Engagement</span><h3>Connexions récentes</h3></div><button className="text-button strong" onClick={() => onView("activity")}>Voir le journal</button></div><div className="engagement-summary"><div><strong>86</strong><span>connexions aujourd’hui</span></div><span className="positive-chip">+14 %</span></div><div className="day-bars" aria-label="Connexions des sept derniers jours">{[42, 64, 53, 78, 90, 58, 72].map((height, index) => <div key={index}><span style={{ height: `${height}%` }} /><small>{["V", "S", "D", "L", "M", "M", "J"][index]}</small></div>)}</div><div className="peak-note"><TrendingUp size={17} /><span><strong>Pic d’activité à 9 h 00</strong><small>24 connexions simultanées</small></span></div></article>
+      <article className="panel completion-panel"><div className="panel-heading"><div><span className="eyebrow">Progression</span><h3>Niveau d’avancement</h3></div></div><div className="completion-layout"><div className="big-progress"><ProgressRing value={metrics.completionRate} size={150} /><span>Taux moyen</span></div><div className="completion-breakdown"><div><span><i className="key-dot complete" /> Terminées</span><strong>{metrics.completedEnrollments}</strong><small>affectations</small></div><div><span><i className="key-dot current" /> En cours</span><strong>{metrics.inProgressEnrollments}</strong><small>affectations</small></div><div><span><i className="key-dot late" /> En retard</span><strong>{metrics.overdue}</strong><small>affectations</small></div></div></div><button className="secondary-button full-button" onClick={() => onView("users")}>Consulter le suivi détaillé <ChevronRight size={16} /></button></article>
+      <article className="panel engagement-panel"><div className="panel-heading"><div><span className="eyebrow">Engagement</span><h3>Connexions récentes</h3></div><button className="text-button strong" onClick={() => onView("activity")}>Voir le journal</button></div><div className="engagement-summary"><div><strong>{metrics.loginsToday}</strong><span>connexion{metrics.loginsToday > 1 ? "s" : ""} aujourd’hui</span></div><span className="positive-chip">Suivi actif</span></div><div className="day-bars" aria-label="Connexions des sept derniers jours">{metrics.loginSeries.map((count, index) => <div key={index} title={`${count} connexion${count > 1 ? "s" : ""}`}><span style={{ height: `${Math.max(4, Math.round((count / maxLogins) * 100))}%` }} /><small>{["J-6", "J-5", "J-4", "J-3", "J-2", "J-1", "J"][index]}</small></div>)}</div><div className="peak-note"><TrendingUp size={17} /><span><strong>Données alimentées à chaque connexion</strong><small>{metrics.inactiveUsers} compte{metrics.inactiveUsers > 1 ? "s" : ""} inactif{metrics.inactiveUsers > 1 ? "s" : ""}</small></span></div></article>
     </section>
-    <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">En direct</span><h3>Activité récente</h3></div><button className="text-button strong">Tout afficher <ChevronRight size={15} /></button></div><div className="activity-list">{recentActivities.map((activity) => <div className="activity-item" key={`${activity.name}-${activity.time}`}><span className={`avatar avatar-${activity.tone}`}>{activity.initials}</span><div className="activity-copy"><p><strong>{activity.name}</strong> {activity.action}</p><span>{activity.item}</span></div><span className="activity-detail">{activity.detail}</span><time>{activity.time}</time></div>)}</div></section>
+    <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">En direct</span><h3>Activité récente</h3></div><button className="text-button strong" onClick={() => onView("activity")}>Tout afficher <ChevronRight size={15} /></button></div>{metrics.activities.length ? <div className="activity-list">{metrics.activities.map((activity, index) => <div className="activity-item" key={`${activity.occurredAt}-${index}`}><span className="avatar avatar-teal">{activity.initials}</span><div className="activity-copy"><p><strong>{activity.name}</strong></p><span>{activity.summary}</span></div><span className="activity-detail">{activity.detail}</span><time>{formatDateTime(activity.occurredAt)}</time></div>)}</div> : <div className="table-empty"><TrendingUp size={22} /><strong>Aucune activité enregistrée</strong><span>Les événements apparaîtront après les premières affectations.</span></div>}</section>
   </>;
 }
 
-function CatalogueView({ onCourse }: { onCourse: (course: Course) => void }) {
+function CatalogueView({ assignedCourses, loading, onCourse }: { assignedCourses: Course[]; loading: boolean; onCourse: (course: Course) => void }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Toutes");
-  const categories = ["Toutes", ...Array.from(new Set(courses.map((course) => course.category)))];
-  const filtered = courses.filter((course) => {
+  const categories = ["Toutes", ...Array.from(new Set(assignedCourses.map((course) => course.category)))];
+  const filtered = assignedCourses.filter((course) => {
     const matchesCategory = category === "Toutes" || course.category === category;
     const haystack = `${course.title} ${course.description} ${course.category}`.toLowerCase();
     return matchesCategory && haystack.includes(query.toLowerCase());
@@ -235,41 +431,71 @@ function CatalogueView({ onCourse }: { onCourse: (course: Course) => void }) {
   return <>
     <section className="page-heading"><div><span className="eyebrow">Votre bibliothèque</span><h1>Mes formations</h1><p>Retrouvez vos parcours, vos échéances et les modules déjà validés.</p></div><span className="count-badge">{filtered.length} formation{filtered.length > 1 ? "s" : ""}</span></section>
     <section className="catalogue-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher dans mes formations…" /></label><div className="filter-pills"><Filter size={16} />{categories.map((item) => <button key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>)}</div></section>
-    {filtered.length ? <div className="course-grid catalogue-grid">{filtered.map((course) => <CourseCard key={course.id} course={course} onOpen={onCourse} />)}</div> : <section className="empty-state compact-empty"><span className="empty-icon"><Search size={28} /></span><h2>Aucun résultat</h2><p>Essayez un autre mot-clé ou retirez le filtre actif.</p></section>}
+    {loading ? <section className="empty-state compact-empty"><Clock3 size={28} /><h2>Chargement de vos formations…</h2></section> : filtered.length ? <div className="course-grid catalogue-grid">{filtered.map((course) => <CourseCard key={course.id} course={course} onOpen={onCourse} />)}</div> : <section className="empty-state compact-empty"><span className="empty-icon"><Inbox size={28} /></span><h2>{assignedCourses.length ? "Aucun résultat" : "Aucune formation assignée"}</h2><p>{assignedCourses.length ? "Essayez un autre mot-clé ou retirez le filtre actif." : "Seuls les parcours attribués par un administrateur apparaîtront dans cet espace."}</p></section>}
+  </>;
+}
+
+function FullCatalogueView({ onCourse }: { onCourse: (course: Course) => void }) {
+  const [query, setQuery] = useState("");
+  const [axis, setAxis] = useState("Tous les axes");
+  const [source, setSource] = useState("Tous les catalogues");
+  const [limit, setLimit] = useState(24);
+  const [selected, setSelected] = useState<CatalogCourse | null>(null);
+  const axes = ["Tous les axes", ...Array.from(new Set(trainingCatalogue.map((item) => item.axis))).sort()];
+  const sources = ["Tous les catalogues", ...Array.from(new Set(trainingCatalogue.map((item) => item.source)))];
+  const filtered = trainingCatalogue.filter((item) => {
+    const haystack = `${item.code} ${item.title} ${item.theme} ${item.audience} ${item.description ?? ""} ${item.objective ?? ""}`.toLowerCase();
+    return (axis === "Tous les axes" || item.axis === axis) && (source === "Tous les catalogues" || item.source === source) && haystack.includes(query.toLowerCase());
+  });
+  return <>
+    <section className="page-heading catalogue-heading"><div><span className="eyebrow">Offre Walyah Académie 2026</span><h1>Catalogues de formations</h1><p>{catalogueTotals.complete} formations métiers, soft skills, IA et cybersécurité, complétées par {catalogueTotals.medical} formations médicales détaillées.</p></div><div className="catalogue-downloads"><span className="count-badge"><BookOpen size={15} /> {catalogueTotals.all} formations intégrées</span><a className="secondary-button" href="/catalogues/catalogue-walyah-academie-2026-complet.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue complet</a><a className="secondary-button" href="/catalogues/catalogue-formations-medicales-2026.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue médical</a></div></section>
+    <section className="catalogue-insights"><article><strong>{catalogueTotals.all}</strong><span>formations indexées</span></article><article><strong>2</strong><span>catalogues 2026</span></article><article><strong>{courses.length}</strong><span>parcours déjà scénarisés</span></article><article><strong>1 clic</strong><span>pour ouvrir une fiche</span></article></section>
+    <section className="catalogue-toolbar admin-catalogue-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => { setQuery(event.target.value); setLimit(24); }} placeholder="Code, titre, thème, public…" /></label><select value={axis} onChange={(event) => { setAxis(event.target.value); setLimit(24); }}>{axes.map((item) => <option key={item}>{item}</option>)}</select><select value={source} onChange={(event) => { setSource(event.target.value); setLimit(24); }}>{sources.map((item) => <option key={item}>{item}</option>)}</select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></section>
+    {filtered.length ? <><div className="master-catalogue-grid">{filtered.slice(0, limit).map((item) => { const ready = readyCourseByCode.get(item.code); return <button className="catalogue-entry" key={item.code} onClick={() => setSelected(item)}><div><span className="course-code">{item.code}</span>{ready ? <span className="status-tag status-actif">Prêt dans le LMS</span> : <span className="status-tag status-draft">Catalogue</span>}</div><h2>{item.title}</h2><p>{item.objective ?? item.description}</p><footer><span><Clock3 size={14} /> {item.duration}</span><span>{item.axis}</span><ChevronRight size={17} /></footer></button>; })}</div>{limit < filtered.length && <div className="load-more"><button className="secondary-button" onClick={() => setLimit(Math.min(limit + 24, filtered.length))}>Afficher 24 formations de plus</button></div>}</> : <section className="empty-state compact-empty"><Search size={28} /><h2>Aucune formation trouvée</h2><p>Modifiez les filtres ou essayez un terme plus général.</p></section>}
+    {selected && <Modal title={`${selected.code} · ${selected.title}`} onClose={() => setSelected(null)} wide><div className="catalogue-detail"><div className="catalogue-detail-meta"><span>{selected.axis}</span><span><Clock3 size={14} /> {selected.duration}</span><span><UsersRound size={14} /> {selected.audience}</span></div>{selected.need && <section><span className="form-section-title">Besoin professionnel</span><p>{selected.need}</p></section>}<section><span className="form-section-title">Objectif</span><p>{selected.objective ?? selected.description}</p></section>{selected.program?.length ? <section><span className="form-section-title">Programme proposé</span><ol>{selected.program.map((item) => <li key={item}>{item}</li>)}</ol></section> : <section><span className="form-section-title">Thème du catalogue</span><p>{selected.theme}</p></section>}{selected.methods && <section><span className="form-section-title">Méthodes pédagogiques</span><p>{selected.methods}</p></section>}{selected.benefit && <section><span className="form-section-title">Bénéfice attendu</span><p>{selected.benefit}</p></section>}<footer><div><small>Source</small><strong>{selected.source}</strong></div>{readyCourseByCode.has(selected.code) ? <button className="primary-button" onClick={() => { const ready = readyCourseByCode.get(selected.code); if (ready) onCourse(ready); }}><Play size={16} /> Ouvrir le parcours</button> : <button className="primary-button" onClick={() => setSelected(null)}><Plus size={16} /> Préparer ce parcours</button>}</footer></div></Modal>}
   </>;
 }
 
 function CourseDetail({ course, onBack, onQuiz }: { course: Course; onBack: () => void; onQuiz: () => void }) {
-  const [activeModule, setActiveModule] = useState(Math.min(course.completedModules + 1, course.modules));
+  const [activeModule, setActiveModule] = useState(Math.max(1, Math.min(course.completedModules + 1, course.modules)));
   const [completedModules, setCompletedModules] = useState(course.completedModules);
   const [notice, setNotice] = useState("");
-  const moduleTitles = ["Introduction et objectifs", "Comprendre les risques", "Les indications essentielles", "Le bon geste pas à pas", "Erreurs fréquentes", course.nextLesson, "Mise en situation", "Évaluation finale"];
-  const markComplete = () => {
+  const [saving, setSaving] = useState(false);
+  const activeContent = course.moduleContent[activeModule - 1] ?? course.moduleContent[0];
+  const markComplete = async () => {
+    if (!activeContent) return;
+    setSaving(true); setNotice("");
+    if (usesNetlifyIdentity()) {
+      try {
+        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete-module", moduleId: activeContent.id ?? `${course.id}-module-${activeModule}` }) });
+        const data = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(data.error || "Enregistrement impossible");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Enregistrement impossible");
+        setSaving(false);
+        return;
+      }
+    }
     const next = Math.max(completedModules, activeModule);
     setCompletedModules(next);
     setNotice("Module validé. Votre progression a bien été enregistrée.");
-    if (usesNetlifyIdentity()) {
-      void fetch("/.netlify/functions/lms-data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "complete-module", moduleId: `${course.id}-module-${activeModule}` }),
-      });
-    }
+    setSaving(false);
     window.setTimeout(() => setNotice(""), 3000);
     if (activeModule < course.modules) setActiveModule(activeModule + 1);
   };
   const progress = Math.round((completedModules / course.modules) * 100);
+  if (!activeContent) return <><button className="back-button" onClick={onBack}><ArrowLeft size={17} /> Retour à mes formations</button><section className="empty-state"><span className="empty-icon"><Inbox size={28} /></span><h1>Contenu en préparation</h1><p>L’administrateur n’a pas encore publié de module dans ce parcours.</p></section></>;
   return <>
     <button className="back-button" onClick={onBack}><ArrowLeft size={17} /> Retour à mes formations</button>
     <section className="course-detail-heading"><div><span className={`detail-icon tone-${course.accent}`}><BookOpen size={27} /></span><div><span className="eyebrow">{course.category} · {course.duration}</span><h1>{course.title}</h1><p>{course.description}</p></div></div><div className="detail-progress"><ProgressRing value={progress} size={70} /><span>{completedModules} / {course.modules} modules</span></div></section>
     {notice && <div className="success-banner" role="status"><CheckCircle2 size={18} /> {notice}</div>}
     <section className="course-player-grid">
       <div className="course-main-column">
-        <div className="video-player"><span className="video-grid" /><div className="video-badge"><Video size={15} /> Vidéo · 08:42</div><button className="play-button" aria-label="Lire la vidéo"><Play size={34} fill="currentColor" /></button><div className="video-caption"><small>Module {activeModule}</small><strong>{moduleTitles[activeModule - 1] || `Module ${activeModule}`}</strong></div></div>
-        <article className="panel lesson-content"><div className="panel-heading"><div><span className="eyebrow">À retenir</span><h3>Objectifs de ce module</h3></div><a className="resource-link" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ouvrir la vidéo source</a></div><p>À la fin de ce module, vous saurez identifier les moments clés, appliquer le protocole adapté et expliquer les bonnes pratiques à un collègue.</p><ul><li><Check size={15} /> Reconnaître les situations à risque</li><li><Check size={15} /> Appliquer la séquence recommandée</li><li><Check size={15} /> Éviter les erreurs les plus courantes</li></ul><div className="lesson-actions"><button className="secondary-button"><FileText size={16} /> Télécharger la fiche mémo</button><button className="primary-button" onClick={markComplete}><CheckCircle2 size={17} /> Marquer comme terminé</button></div></article>
-        <article className="panel resources-panel"><div className="panel-heading"><div><span className="eyebrow">Documents</span><h3>Ressources du module</h3></div></div><div className="resource-list"><button><span className="resource-icon pdf"><FileText size={19} /></span><span><strong>Fiche pratique — Les 5 indications</strong><small>PDF · 1,4 Mo</small></span><Download size={17} /></button><button><span className="resource-icon link"><Link2 size={19} /></span><span><strong>Référentiel de bonnes pratiques</strong><small>Lien externe</small></span><ExternalLink size={17} /></button></div></article>
+        <div className="video-player"><span className="video-grid" /><div className="video-badge">{activeContent.type === "video" ? <Video size={15} /> : <FileText size={15} />} {activeContent.type === "video" ? "Vidéo" : activeContent.type === "case" ? "Étude de cas" : activeContent.type === "quiz" ? "Évaluation" : "Cours"} · {activeContent.duration}</div>{activeContent.videoUrl ? <a className="play-button" href={activeContent.videoUrl} target="_blank" rel="noreferrer" aria-label="Ouvrir la vidéo"><Play size={34} fill="currentColor" /></a> : <span className="play-button play-button-disabled" aria-label="Aucun média publié"><FileText size={30} /></span>}<div className="video-caption"><small>Module {activeModule}</small><strong>{activeContent.title}</strong></div></div>
+        <article className="panel lesson-content"><div className="panel-heading"><div><span className="eyebrow">À retenir</span><h3>Objectifs de ce module</h3></div>{activeContent.videoUrl && <a className="resource-link" href={activeContent.videoUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ouvrir la vidéo</a>}</div><p>{activeContent.summary}</p>{activeContent.points.length ? <ul>{activeContent.points.map((point) => <li key={point}><Check size={15} /> {point}</li>)}</ul> : <p className="muted-copy">Les objectifs détaillés seront ajoutés par l’équipe pédagogique.</p>}<div className="lesson-actions"><button className="primary-button" onClick={markComplete} disabled={saving}><CheckCircle2 size={17} /> {saving ? "Enregistrement…" : "Marquer comme terminé"}</button></div></article>
+        <article className="panel resources-panel"><div className="panel-heading"><div><span className="eyebrow">Documents</span><h3>Ressources du module</h3></div></div>{activeContent.resources?.length ? <div className="resource-list">{activeContent.resources.map((resource, index) => resource.url ? <a key={`${resource.name}-${index}`} href={resource.url} target="_blank" rel="noreferrer"><span className="resource-icon link"><Link2 size={19} /></span><span><strong>{resource.name}</strong><small>{resource.type}</small></span><ExternalLink size={17} /></a> : <div key={`${resource.name}-${index}`}><span className="resource-icon pdf"><FileText size={19} /></span><span><strong>{resource.name}</strong><small>{resource.type}</small></span></div>)}</div> : <div className="table-empty"><FileText size={22} /><strong>Aucune ressource jointe</strong><span>Les documents publiés par l’administrateur apparaîtront ici.</span></div>}</article>
       </div>
-      <aside className="module-sidebar panel"><div className="module-sidebar-head"><span className="eyebrow">Sommaire</span><h3>{course.modules} modules</h3><div className="linear-progress"><span style={{ width: `${progress}%` }} /></div><small>{progress} % complété</small></div><div className="module-list">{Array.from({ length: course.modules }, (_, index) => { const number = index + 1; const done = number <= completedModules; const active = number === activeModule; return <button key={number} className={active ? "active" : ""} onClick={() => setActiveModule(number)}><span className={done ? "module-status done" : "module-status"}>{done ? <Check size={14} /> : number}</span><span><small>Module {number}</small><strong>{moduleTitles[index] || `Approfondissement ${number}`}</strong></span>{active && <Play size={14} fill="currentColor" />}</button>; })}</div><div className="quiz-callout"><span><FileQuestion size={20} /></span><div><strong>Évaluation finale</strong><p>10 questions · seuil 80 %</p></div><button onClick={onQuiz}>Démarrer le QCM</button></div></aside>
+      <aside className="module-sidebar panel"><div className="module-sidebar-head"><span className="eyebrow">Sommaire</span><h3>{course.modules} modules</h3><div className="linear-progress"><span style={{ width: `${progress}%` }} /></div><small>{progress} % complété</small></div><div className="module-list">{course.moduleContent.map((item, index) => { const number = index + 1; const done = number <= completedModules; const active = number === activeModule; return <button key={item.id ?? `${course.id}-${number}`} className={active ? "active" : ""} onClick={() => setActiveModule(number)}><span className={done ? "module-status done" : "module-status"}>{done ? <Check size={14} /> : number}</span><span><small>Module {number} · {item.duration}</small><strong>{item.title}</strong></span>{active && <Play size={14} fill="currentColor" />}</button>; })}</div>{course.id === "hygiene-mains" && <div className="quiz-callout"><span><FileQuestion size={20} /></span><div><strong>Évaluation finale</strong><p>Questionnaire publié</p></div><button onClick={onQuiz}>Démarrer le QCM</button></div>}</aside>
     </section>
   </>;
 }
@@ -299,17 +525,37 @@ function QuizView({ course, onBack }: { course: Course; onBack: () => void }) {
   </>;
 }
 
-function CertificatesView() {
-  const items = [courses[2], { ...courses[0], title: "Hygiène et sécurité au travail", category: "Prévention" }, { ...courses[1], title: "Excellence de l’accueil patient", category: "Relation patient" }];
-  return <><section className="page-heading"><div><span className="eyebrow">Vos réussites</span><h1>Mes certificats</h1><p>Consultez et téléchargez les attestations obtenues au fil de votre parcours.</p></div><span className="count-badge"><Award size={15} /> 3 certificats</span></section><div className="certificate-grid">{items.map((course, index) => <article className="certificate-card" key={`${course.id}-${index}`}><div className="certificate-top"><span className="certificate-mark"><Award size={28} /></span><span className="certificate-number">N° WAL-2026-{1187 + index}</span></div><span className="eyebrow">Certificat de réussite</span><h2>{course.title}</h2><p>Délivré à <strong>Arielle Ndong</strong> le {index === 0 ? "18 août" : index === 1 ? "12 juillet" : "30 juin"} 2026.</p><div className="certificate-score"><span>Score final</span><strong>{[96, 88, 92][index]} %</strong></div><button className="secondary-button"><Download size={16} /> Télécharger le certificat</button></article>)}</div></>;
+function CertificatesView({ name, certificates, loading }: { name: string; certificates: CertificateRecord[]; loading: boolean }) {
+  return <><section className="page-heading"><div><span className="eyebrow">Vos réussites</span><h1>Mes certificats</h1><p>Consultez les attestations obtenues au fil de votre parcours.</p></div><span className="count-badge"><Award size={15} /> {certificates.length} certificat{certificates.length > 1 ? "s" : ""}</span></section>{loading ? <section className="empty-state compact-empty"><Clock3 size={28} /><h2>Chargement des certificats…</h2></section> : certificates.length ? <div className="certificate-grid">{certificates.map((certificate) => <article className="certificate-card" key={certificate.certificateNumber}><div className="certificate-top"><span className="certificate-mark"><Award size={28} /></span><span className="certificate-number">N° {certificate.certificateNumber}</span></div><span className="eyebrow">Certificat de réussite</span><h2>{certificate.courseTitle}</h2><p>Délivré à <strong>{name}</strong> le {formatDate(certificate.issuedAt)}.</p><div className="certificate-score"><span>Score final</span><strong>{certificate.score === null ? "Validé" : `${certificate.score} %`}</strong></div></article>)}</div> : <section className="empty-state compact-empty"><span className="empty-icon"><Award size={28} /></span><h2>Aucun certificat disponible</h2><p>Vos attestations apparaîtront ici après validation des formations concernées.</p></section>}</>;
 }
 
-function UsersView() {
+function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
+  const [items, setItems] = useState<Learner[]>([]);
+  const [loading, setLoading] = useState(() => usesNetlifyIdentity());
+  const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tous");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invited, setInvited] = useState<string[]>([]);
-  const filtered = learners.filter((learner) => (status === "Tous" || learner.status === status) && `${learner.name} ${learner.email} ${learner.department}`.toLowerCase().includes(query.toLowerCase()));
+  useEffect(() => {
+    if (!usesNetlifyIdentity()) return;
+    void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { learners?: Array<Record<string, unknown>> }) => {
+      const rows = data.learners ?? [];
+      setItems(rows.map((row) => {
+        const name = String(row.full_name ?? row.email ?? "Apprenant");
+        const assigned = Number(row.assigned ?? 0);
+        const completed = Number(row.completed ?? 0);
+        const rawStatus = String(row.status ?? "active");
+        return {
+          id: String(row.id), matricule: String(row.matricule ?? "À renseigner"), name, initials: initialsFrom(name), email: String(row.email ?? ""), phone: "À renseigner",
+          department: String(row.department ?? "Non renseigné"), jobTitle: String(row.job_title ?? "Non renseigné"), manager: "À renseigner", hireDate: "À renseigner", location: String(row.location ?? "Non renseigné"),
+          progress: Number(row.progress ?? 0), completed, assigned, lastLogin: row.last_login_at ? new Date(String(row.last_login_at)).toLocaleDateString("fr-FR") : "Jamais", lastLoginDetail: row.last_login_at ? new Date(String(row.last_login_at)).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "",
+          status: rawStatus === "inactive" ? "Inactif" : rawStatus === "suspended" ? "À relancer" : "Actif", passportStatus: "À connecter", trainings: [],
+        } satisfies Learner;
+      }));
+    }).catch(() => setLoadError("Les apprenants n’ont pas pu être chargés. Réessayez après avoir vérifié la base Netlify.")).finally(() => setLoading(false));
+  }, []);
+  const filtered = items.filter((learner) => (status === "Tous" || learner.status === status) && `${learner.name} ${learner.matricule} ${learner.email} ${learner.department}`.toLowerCase().includes(query.toLowerCase()));
   const exportCsv = () => {
     const rows = [["Nom", "Email", "Service", "Progression", "Formations terminées", "Dernière connexion", "Statut"], ...filtered.map((item) => [item.name, item.email, item.department, `${item.progress}%`, `${item.completed}/${item.assigned}`, `${item.lastLogin} ${item.lastLoginDetail}`, item.status])];
     const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
@@ -319,27 +565,133 @@ function UsersView() {
   return <>
     <section className="page-heading"><div><span className="eyebrow">Gestion des utilisateurs</span><h1>Apprenants</h1><p>Suivez la progression, l’assiduité et les dernières connexions.</p></div><div className="heading-actions"><button className="secondary-button" onClick={exportCsv}><Download size={17} /> Exporter le suivi</button><button className="primary-button" onClick={() => setInviteOpen(true)}><UserPlus size={17} /> Inviter un apprenant</button></div></section>
     {invited.length > 0 && <div className="success-banner"><CheckCircle2 size={18} /> {invited.length} invitation{invited.length > 1 ? "s" : ""} envoyée{invited.length > 1 ? "s" : ""} pendant cette session.</div>}
-    <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, e-mail ou service…" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option><option>Actif</option><option>À relancer</option><option>Inactif</option></select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Apprenant</th><th>Service</th><th>Progression</th><th>Formations</th><th>Dernière connexion</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filtered.map((learner) => <tr key={learner.id}><td><span className="person-cell"><span className="avatar avatar-dark">{learner.initials}</span><span><strong>{learner.name}</strong><small>{learner.email}</small></span></span></td><td>{learner.department}</td><td><span className="table-progress"><span><i style={{ width: `${learner.progress}%` }} /></span><strong>{learner.progress} %</strong></span></td><td><strong>{learner.completed}</strong> / {learner.assigned}</td><td><strong>{learner.lastLogin}</strong><small>{learner.lastLoginDetail}</small></td><td><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></td><td><button className="icon-button"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table></div></section>
+    {loadError && <div className="form-message" role="alert">{loadError}</div>}
+    <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, matricule, e-mail ou service…" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option><option>Actif</option><option>À relancer</option><option>Inactif</option></select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Apprenant</th><th>Service</th><th>Progression</th><th>Formations</th><th>Dernière connexion</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filtered.map((learner) => <tr className="clickable-row" key={learner.id} onClick={() => onLearner(learner)}><td><button className="person-cell person-button"><span className="avatar avatar-dark">{learner.initials}</span><span><strong>{learner.name}</strong><small>{learner.matricule} · {learner.email}</small></span></button></td><td>{learner.department}</td><td><span className="table-progress"><span><i style={{ width: `${learner.progress}%` }} /></span><strong>{learner.progress} %</strong></span></td><td><strong>{learner.completed}</strong> / {learner.assigned}</td><td><strong>{learner.lastLogin}</strong><small>{learner.lastLoginDetail}</small></td><td><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></td><td><button className="icon-button" aria-label={`Ouvrir la fiche de ${learner.name}`} onClick={(event) => { event.stopPropagation(); onLearner(learner); }}><ChevronRight size={18} /></button></td></tr>)}{filtered.length === 0 && <tr><td colSpan={7}><div className="table-empty">{loading ? <Clock3 size={22} /> : <UsersRound size={22} />}<strong>{loading ? "Chargement des apprenants…" : "Aucun apprenant enregistré"}</strong><span>{loading ? "Veuillez patienter." : "Invitez un apprenant pour créer son dossier vide."}</span></div></td></tr>}</tbody></table></div></section>
     {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} onInvited={(email) => { setInvited([...invited, email]); setInviteOpen(false); }} />}
   </>;
+}
+
+function LearnerProfileView({ learner: initialLearner, onBack }: { learner: Learner; onBack: () => void }) {
+  const [learner, setLearner] = useState(initialLearner);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [timeline, setTimeline] = useState<Array<{ title: string; detail: string; occurredAt: string }>>([]);
+  const [passportLastSync, setPassportLastSync] = useState("Jamais");
+  useEffect(() => {
+    if (!usesNetlifyIdentity()) return;
+    void fetch(`/.netlify/functions/lms-data?scope=learner&id=${encodeURIComponent(initialLearner.id)}`).then((response) => response.ok ? response.json() : Promise.reject()).then((data: { profile?: Record<string, unknown>; enrollments?: Array<Record<string, unknown>>; attempts?: Array<Record<string, unknown>>; certificates?: Array<Record<string, unknown>>; logins?: Array<Record<string, unknown>>; activity?: Array<Record<string, unknown>>; passport?: Record<string, unknown> | null }) => {
+      const profile = data.profile;
+      if (!profile) return;
+      const certificateByCourse = new Map((data.certificates ?? []).map((item) => [String(item.course_id), item]));
+      const scoreByCourse = new Map((data.attempts ?? []).filter((item) => Boolean(item.passed)).map((item) => [String(item.course_id ?? ""), Number(item.score ?? 0)]));
+      const trainings: Learner["trainings"] = (data.enrollments ?? []).map((item) => {
+        const rawStatus = String(item.status ?? "assigned");
+        const status = rawStatus === "completed" ? "Terminée" : rawStatus === "overdue" ? "En retard" : rawStatus === "in_progress" ? "En cours" : "À commencer";
+        const courseId = String(item.course_id);
+        const certificate = certificateByCourse.get(courseId);
+        return { courseId, code: String(item.code ?? "WA"), title: String(item.title ?? "Formation"), status, progress: Number(item.progress_percent ?? 0), completedModules: Number(item.completed_modules ?? 0), modules: Number(item.modules ?? 0), assignedAt: formatDate(item.assigned_at), dueDate: item.due_at ? formatDate(item.due_at) : undefined, completedAt: item.completed_at ? formatDate(item.completed_at) : undefined, score: certificate?.score !== undefined && certificate?.score !== null ? Number(certificate.score) : scoreByCourse.get(courseId), certificate: certificate?.certificate_number ? String(certificate.certificate_number) : undefined };
+      });
+      const completed = trainings.filter((item) => item.status === "Terminée").length;
+      const progress = trainings.length ? Math.round(trainings.reduce((sum, item) => sum + item.progress, 0) / trainings.length) : 0;
+      const rawStatus = String(profile.status ?? "active");
+      const name = String(profile.full_name ?? initialLearner.name);
+      setLearner({ ...initialLearner, name, initials: initialsFrom(name), matricule: String(profile.matricule ?? initialLearner.matricule), email: String(profile.email ?? initialLearner.email), phone: String(profile.phone ?? "À renseigner"), department: String(profile.department ?? "Non renseigné"), jobTitle: String(profile.job_title ?? "Non renseigné"), manager: String(profile.manager_name ?? "À renseigner"), hireDate: profile.hire_date ? formatDate(profile.hire_date) : "À renseigner", location: String(profile.location ?? "Non renseigné"), status: rawStatus === "inactive" ? "Inactif" : rawStatus === "suspended" ? "À relancer" : "Actif", progress, completed, assigned: trainings.length, passportStatus: data.passport?.sync_status === "connected" ? "Synchronisé" : "À connecter", trainings });
+      setPassportLastSync(data.passport?.last_synced_at ? formatDateTime(data.passport.last_synced_at) : "Jamais");
+      const activityItems = (data.activity ?? []).map((item) => ({ title: String(item.summary ?? "Activité enregistrée"), detail: String(item.event_type ?? "Événement de formation"), occurredAt: String(item.occurred_at ?? "") }));
+      const loginItems = (data.logins ?? []).map((item) => ({ title: String(item.event_type ?? "login") === "login" ? "Connexion réussie" : String(item.event_type), detail: "Accès à la plateforme", occurredAt: String(item.occurred_at ?? "") }));
+      setTimeline([...activityItems, ...loginItems].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()).slice(0, 20));
+    }).catch(() => setNotice("La fiche n’a pas pu être chargée depuis la base Netlify."));
+  }, [initialLearner]);
+  const downloadRecord = () => {
+    const rows = [["Matricule", learner.matricule], ["Nom", learner.name], ["Email", learner.email], ["Service", learner.department], [], ["Code", "Formation", "Statut", "Progression", "Score", "Certificat"], ...learner.trainings.map((item) => [item.code, item.title, item.status, `${item.progress}%`, item.score ? `${item.score}%` : "", item.certificate ?? ""])];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = `fiche-formation-${learner.matricule}.csv`; link.click(); URL.revokeObjectURL(url);
+  };
+  const requestPassportSync = async () => {
+    if (!usesNetlifyIdentity()) { setNotice("La passerelle passeport est prête et sera activée avec les variables Netlify."); return; }
+    try {
+      const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "request-passport-sync", userId: learner.id }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Synchronisation impossible");
+      setNotice("La demande de synchronisation a été placée dans la file du passeport.");
+    } catch (caught) { setNotice(caught instanceof Error ? caught.message : "Synchronisation impossible"); }
+    window.setTimeout(() => setNotice(""), 3500);
+  };
+  return <>
+    <button className="back-button" onClick={onBack}><ArrowLeft size={17} /> Retour aux apprenants</button>
+    {notice && <div className="success-banner"><CheckCircle2 size={18} /> {notice}</div>}
+    <section className="learner-profile-hero"><div className="profile-identity"><span className="avatar avatar-dark profile-avatar">{learner.initials}</span><div><div className="profile-title-row"><h1>{learner.name}</h1><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></div><p>{learner.jobTitle} · {learner.department}</p><span>{learner.matricule} · {learner.email}</span></div></div><div className="heading-actions"><button className="secondary-button" onClick={downloadRecord}><Download size={17} /> Exporter la fiche</button><button className="primary-button" onClick={() => setAssignOpen(true)}><Plus size={17} /> Assigner une formation</button></div></section>
+    <section className="learner-profile-metrics"><article><ProgressRing value={learner.progress} size={66} /><span><strong>Progression globale</strong><small>{learner.completed} formation{learner.completed > 1 ? "s" : ""} terminée{learner.completed > 1 ? "s" : ""} sur {learner.assigned}</small></span></article><article><Award size={25} /><span><strong>{learner.trainings.filter((item) => item.certificate).length} certificat{learner.trainings.filter((item) => item.certificate).length > 1 ? "s" : ""}</strong><small>Attestations disponibles</small></span></article><article><Clock3 size={25} /><span><strong>{learner.lastLogin} · {learner.lastLoginDetail}</strong><small>Dernière connexion</small></span></article><article><Link2 size={25} /><span><strong>{learner.passportStatus}</strong><small>Passeport de formation</small></span></article></section>
+    <section className="learner-profile-grid"><article className="panel profile-details"><div className="panel-heading"><div><span className="eyebrow">Dossier collaborateur</span><h3>Informations générales</h3></div><Edit3 size={18} /></div><dl><div><dt>Matricule</dt><dd>{learner.matricule}</dd></div><div><dt>Fonction</dt><dd>{learner.jobTitle}</dd></div><div><dt>Service</dt><dd>{learner.department}</dd></div><div><dt>Responsable</dt><dd>{learner.manager}</dd></div><div><dt>Site</dt><dd>{learner.location}</dd></div><div><dt>Date d’entrée</dt><dd>{learner.hireDate}</dd></div><div><dt>Téléphone</dt><dd>{learner.phone}</dd></div><div><dt>E-mail</dt><dd>{learner.email}</dd></div></dl></article><article className="panel passport-panel"><div className="panel-heading"><div><span className="eyebrow">Interopérabilité</span><h3>Passeport de formation</h3></div><span className={`status-tag ${learner.passportStatus === "Synchronisé" ? "status-actif" : "status-relancer"}`}>{learner.passportStatus}</span></div><p>Le LMS prépare les événements d’assignation, de progression, de réussite et de certificat. La correspondance utilise d’abord le matricule, puis l’e-mail.</p><div className="passport-keys"><span><small>Clé principale</small><strong>{learner.matricule}</strong></span><span><small>Dernière synchronisation</small><strong>{passportLastSync}</strong></span></div><button className="secondary-button" onClick={requestPassportSync}><Link2 size={16} /> {learner.passportStatus === "Synchronisé" ? "Synchroniser maintenant" : "Connecter le passeport"}</button></article></section>
+    <section className="panel training-history"><div className="panel-heading"><div><span className="eyebrow">Traçabilité individuelle</span><h3>Éléments de formation réalisés et assignés</h3></div><span className="count-badge">{learner.trainings.length} parcours</span></div>{learner.trainings.length ? <div className="training-records">{learner.trainings.map((item) => <article key={`${learner.id}-${item.code}`}><div className="record-main"><span className="course-code">{item.code}</span><div><h4>{item.title}</h4><p>Assignée le {item.assignedAt}{item.dueDate ? ` · échéance ${item.dueDate}` : ""}</p></div></div><div className="record-progress"><div><span style={{ width: `${item.progress}%` }} /></div><strong>{item.progress} %</strong><small>{item.completedModules}/{item.modules} modules</small></div><div className="record-result"><span className={`status-tag ${item.status === "Terminée" ? "status-actif" : item.status === "En retard" ? "status-relancer" : "status-active"}`}>{item.status}</span>{item.score !== undefined && <strong>QCM {item.score} %</strong>}{item.certificate && <span className="text-button strong"><Award size={15} /> {item.certificate}</span>}</div></article>)}</div> : <div className="table-empty"><Inbox size={22} /><strong>Aucune formation assignée</strong><span>Utilisez le bouton « Assigner une formation » pour construire progressivement ce parcours.</span></div>}</section>
+    <section className="panel learner-timeline"><div className="panel-heading"><div><span className="eyebrow">Activité récente</span><h3>Connexions et événements</h3></div></div>{timeline.length ? <ol>{timeline.map((item, index) => <li key={`${item.occurredAt}-${index}`}><span className={`activity-dot ${index % 3 === 0 ? "teal" : index % 3 === 1 ? "violet" : "blue"}`} /><div><strong>{item.title}</strong><p>{item.detail} · {formatDateTime(item.occurredAt)}</p></div></li>)}</ol> : <div className="table-empty"><Clock3 size={22} /><strong>Aucun événement enregistré</strong><span>Les connexions, affectations et résultats apparaîtront ici.</span></div>}</section>
+    {assignOpen && <AssignTrainingModal learner={learner} onClose={() => setAssignOpen(false)} onAssigned={(course) => { setAssignOpen(false); setNotice(`${course.title} a été assignée à ${learner.name}.`); window.setTimeout(() => setNotice(""), 3500); }} />}
+  </>;
+}
+
+function AssignTrainingModal({ learner, onClose, onAssigned }: { learner: Learner; onClose: () => void; onAssigned: (course: Course) => void }) {
+  const [courseId, setCourseId] = useState(courses[0].id);
+  const [dueAt, setDueAt] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setError("");
+    const course = courses.find((item) => item.id === courseId) ?? courses[0];
+    if (!usesNetlifyIdentity()) { onAssigned(course); return; }
+    setLoading(true);
+    try {
+      const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "assign-course", userId: learner.id, courseId, dueAt: dueAt || null, note }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Assignation impossible");
+      onAssigned(course);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Assignation impossible"); }
+    finally { setLoading(false); }
+  };
+  return <Modal title={`Assigner une formation à ${learner.name}`} onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Parcours publié<select value={courseId} onChange={(event) => setCourseId(event.target.value)}>{courses.map((course) => <option value={course.id} key={course.id}>{course.code} · {course.title}</option>)}</select></label><label>Date limite<input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label><label>Consigne pour l’apprenant<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Objectif, contexte ou priorité…" /></label>{error && <p className="form-message" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={loading}><Send size={16} /> {loading ? "Assignation…" : "Assigner le parcours"}</button></footer></form></Modal>;
 }
 
 function InviteModal({ onClose, onInvited }: { onClose: () => void; onInvited: (email: string) => void }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("Accueil");
-  const submit = (event: FormEvent) => { event.preventDefault(); onInvited(email); };
-  return <Modal title="Inviter un apprenant" onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Nom complet<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nom et prénom" required /></label><label>Adresse e-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="prenom.nom@entreprise.com" required /></label><label>Service<select value={department} onChange={(event) => setDepartment(event.target.value)}><option>Accueil</option><option>Laboratoire</option><option>Imagerie</option><option>Optique</option><option>Administration</option><option>Maintenance</option></select></label><label>Formations à assigner<select multiple defaultValue={["Hygiène des mains"]}><option>Hygiène des mains</option><option>Communication patient</option><option>Confidentialité des données</option><option>Sécurité incendie</option></select><small>Maintenez Ctrl/Cmd pour sélectionner plusieurs parcours.</small></label><footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit"><Send size={16} /> Envoyer l’invitation</button></footer></form></Modal>;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setError("");
+    if (!usesNetlifyIdentity()) { setError("L’envoi sécurisé des invitations sera actif sur votre domaine Netlify."); return; }
+    setLoading(true);
+    try {
+      const response = await fetch("/.netlify/functions/user-admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "invite-learner", email, fullName: name, department }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Invitation impossible");
+      onInvited(email);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Invitation impossible"); }
+    finally { setLoading(false); }
+  };
+  return <Modal title="Inviter un apprenant" onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Nom complet<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nom et prénom" required /></label><label>Adresse e-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="prenom.nom@entreprise.com" required /></label><label>Service<select value={department} onChange={(event) => setDepartment(event.target.value)}><option>Accueil</option><option>Laboratoire</option><option>Imagerie</option><option>Optique</option><option>Administration</option><option>Maintenance</option></select></label><div className="neutral-note"><ShieldCheck size={17} /><span><strong>Compte créé sans formation</strong><small>Vous pourrez affecter les modules progressivement depuis la fiche de l’apprenant.</small></span></div>{error && <p className="form-message" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={loading}><Send size={16} /> {loading ? "Envoi…" : "Créer et envoyer l’accès"}</button></footer></form></Modal>;
 }
 
 function TrainingsView() {
   const [items, setItems] = useState<Course[]>(courses);
+  const [stats, setStats] = useState<Record<string, { enrolled: number; completion: number }>>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [manageCourse, setManageCourse] = useState<Course | null>(null);
+  const [loadError, setLoadError] = useState("");
   const createCourse = (course: Course) => { setItems([course, ...items]); setCreateOpen(false); };
+  useEffect(() => {
+    if (!usesNetlifyIdentity()) return;
+    void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { courseStats?: Array<Record<string, unknown>> }) => {
+      const rows = data.courseStats ?? [];
+      if (rows.length) setItems(rows.map(courseFromRow));
+      setStats(Object.fromEntries(rows.map((row) => [String(row.id), { enrolled: Number(row.enrolled ?? 0), completion: Number(row.completion_rate ?? 0) }])));
+    }).catch(() => setLoadError("La bibliothèque distante n’a pas pu être chargée."));
+  }, []);
   return <>
     <section className="page-heading"><div><span className="eyebrow">Bibliothèque pédagogique</span><h1>Formations</h1><p>Créez vos parcours, ajoutez vidéos et documents, puis assignez-les aux équipes.</p></div><button className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={17} /> Créer une formation</button></section>
-    <section className="admin-course-list">{items.map((course) => <article className="admin-course-row" key={course.id}><CourseVisual course={course} compact /><div className="admin-course-copy"><div><span className="eyebrow">{course.category}</span>{course.mandatory && <span className="status-tag status-required">Obligatoire</span>}</div><h2>{course.title}</h2><p>{course.description}</p><div className="admin-course-meta"><span><BookOpen size={14} /> {course.modules} modules</span><span><Clock3 size={14} /> {course.duration}</span><span><UsersRound size={14} /> {34 + course.modules * 9} inscrits</span></div></div><div className="admin-course-stats"><span>Taux de complétion</span><strong>{Math.max(course.progress, 54)} %</strong><div className="linear-progress"><span style={{ width: `${Math.max(course.progress, 54)}%` }} /></div><div><button className="secondary-button" onClick={() => setManageCourse(course)}><Edit3 size={16} /> Gérer le contenu</button><button className="icon-button"><MoreHorizontal size={18} /></button></div></div></article>)}</section>
+    {loadError && <div className="form-message" role="alert">{loadError}</div>}
+    <section className="admin-course-list">{items.map((course) => { const courseStats = stats[course.id] ?? { enrolled: 0, completion: 0 }; return <article className="admin-course-row" key={course.id}><CourseVisual course={course} compact /><div className="admin-course-copy"><div><span className="eyebrow">{course.category}</span>{course.mandatory && <span className="status-tag status-required">Obligatoire</span>}</div><h2>{course.title}</h2><p>{course.description}</p><div className="admin-course-meta"><span><BookOpen size={14} /> {course.modules} modules</span><span><Clock3 size={14} /> {course.duration}</span><span><UsersRound size={14} /> {courseStats.enrolled} inscrit{courseStats.enrolled > 1 ? "s" : ""}</span></div></div><div className="admin-course-stats"><span>Taux de complétion</span><strong>{courseStats.completion} %</strong><div className="linear-progress"><span style={{ width: `${courseStats.completion}%` }} /></div><div><button className="secondary-button" onClick={() => setManageCourse(course)}><Edit3 size={16} /> Gérer le contenu</button><button className="icon-button"><MoreHorizontal size={18} /></button></div></div></article>; })}</section>
     {createOpen && <CreateCourseModal onClose={() => setCreateOpen(false)} onCreate={createCourse} />}
     {manageCourse && <ManageContentModal course={manageCourse} onClose={() => setManageCourse(null)} />}
   </>;
@@ -347,73 +699,121 @@ function TrainingsView() {
 
 function CreateCourseModal({ onClose, onCreate }: { onClose: () => void; onCreate: (course: Course) => void }) {
   const [title, setTitle] = useState(""); const [category, setCategory] = useState("Hygiène"); const [description, setDescription] = useState(""); const [duration, setDuration] = useState("1 h 00"); const [mandatory, setMandatory] = useState(false);
+  const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
   const submit = async (event: FormEvent) => {
-    event.preventDefault();
+    event.preventDefault(); setError(""); setLoading(true);
     let id = `course-${Date.now()}`;
+    let code = `WA-${Date.now().toString().slice(-6)}`;
     if (usesNetlifyIdentity()) {
       try {
         const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create-course", title, category, description, durationMinutes: Number.parseInt(duration, 10) * 60 || 60, mandatory }) });
-        const data = await response.json() as { id?: string };
-        if (data.id) id = data.id;
-      } catch { /* Preserve the draft locally if the network is unavailable. */ }
+        const data = await response.json() as { id?: string; code?: string; error?: string };
+        if (!response.ok) throw new Error(data.error || "Création impossible");
+        if (data.id) id = data.id; if (data.code) code = data.code;
+      } catch (caught) { setError(caught instanceof Error ? caught.message : "Création impossible"); setLoading(false); return; }
     }
-    onCreate({ id, title, category, description, duration, modules: 1, completedModules: 0, progress: 0, status: "À commencer", mandatory, accent: "coral", nextLesson: "Introduction et objectifs" });
+    onCreate({ id, code, title, category, description, objective: description, audience: "À définir", source: "Création interne Walyah Académie", duration, modules: 1, completedModules: 0, progress: 0, status: "À commencer", mandatory, accent: "coral", nextLesson: "Introduction et objectifs", moduleContent: [moduleDraft(title)] });
+    setLoading(false);
   };
-  return <Modal title="Créer une formation" onClose={onClose} wide><form className="modal-form form-grid" onSubmit={submit}><label className="full-field">Titre de la formation<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex. Gestion des situations difficiles" required /></label><label>Catégorie<select value={category} onChange={(event) => setCategory(event.target.value)}><option>Hygiène</option><option>Soft skills</option><option>Management</option><option>Sécurité</option><option>Conformité</option></select></label><label>Durée estimée<input value={duration} onChange={(event) => setDuration(event.target.value)} required /></label><label className="full-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Objectifs et bénéfices du parcours…" rows={4} required /></label><label className="check-field full-field"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} /><span><strong>Formation obligatoire</strong><small>Une échéance et des relances pourront être configurées.</small></span></label><footer className="full-field"><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit"><Save size={16} /> Créer et ajouter le contenu</button></footer></form></Modal>;
+  return <Modal title="Créer une formation" onClose={onClose} wide><form className="modal-form form-grid" onSubmit={submit}><label className="full-field">Titre de la formation<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex. Gestion des situations difficiles" required /></label><label>Catégorie<select value={category} onChange={(event) => setCategory(event.target.value)}><option>Hygiène</option><option>Soft skills</option><option>Management</option><option>Sécurité</option><option>Conformité</option></select></label><label>Durée estimée<input value={duration} onChange={(event) => setDuration(event.target.value)} required /></label><label className="full-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Objectifs et bénéfices du parcours…" rows={4} required /></label><label className="check-field full-field"><input type="checkbox" checked={mandatory} onChange={(event) => setMandatory(event.target.checked)} /><span><strong>Formation obligatoire</strong><small>Une échéance et des relances pourront être configurées.</small></span></label>{error && <p className="form-message full-field" role="alert">{error}</p>}<footer className="full-field"><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={loading}><Save size={16} /> {loading ? "Création…" : "Créer et ajouter le contenu"}</button></footer></form></Modal>;
 }
 
 function ManageContentModal({ course, onClose }: { course: Course; onClose: () => void }) {
-  const [resources, setResources] = useState([{ name: "Introduction et objectifs", type: "Vidéo", detail: "08:42" }, { name: "Fiche mémo du protocole", type: "PDF", detail: "1,4 Mo" }]);
+  const [resources, setResources] = useState((course.moduleContent[0]?.resources ?? []).map((resource) => ({ name: resource.name, type: resource.type === "link" ? "Lien" : "Document", detail: resource.url ? "Externe" : "Stockage sécurisé" })));
   const [videoUrl, setVideoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
-  const addVideo = (event: FormEvent) => { event.preventDefault(); if (!videoUrl) return; setResources([...resources, { name: videoUrl, type: "Lien vidéo", detail: "Externe" }]); setVideoUrl(""); };
-  const addFile = async (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; setUploading(true); if (usesNetlifyIdentity()) { try { const form = new FormData(); form.append("file", file); form.append("courseId", course.id); await fetch("/.netlify/functions/upload", { method: "POST", body: form }); } catch { /* The file remains visible locally so the admin can continue. */ } } setResources([...resources, { name: file.name, type: file.type.includes("pdf") ? "PDF" : "Document", detail: `${(file.size / 1024 / 1024).toFixed(1)} Mo` }]); setUploading(false); };
-  return <Modal title={`Contenu · ${course.title}`} onClose={onClose} wide><div className="content-manager"><section><span className="form-section-title"><Video size={17} /> Ajouter un lien vidéo</span><form className="inline-form" onSubmit={addVideo}><span><Link2 size={16} /><input type="url" value={videoUrl} onChange={(event) => setVideoUrl(event.target.value)} placeholder="https://youtube.com/… ou https://vimeo.com/…" /></span><button className="primary-button" type="submit">Ajouter</button></form></section><section><span className="form-section-title"><FileUp size={17} /> Importer un contenu</span><label className="upload-zone"><UploadCloud size={28} /><strong>{uploading ? "Import en cours…" : "Déposez ou sélectionnez un fichier"}</strong><small>PDF, DOCX, PPTX, MP4 · 50 Mo maximum</small><input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,video/mp4" onChange={addFile} disabled={uploading} /></label></section><section><span className="form-section-title"><LibraryBig size={17} /> Contenu du module</span><div className="managed-resources">{resources.map((resource, index) => <div key={`${resource.name}-${index}`}><span className={`resource-icon ${resource.type.toLowerCase().includes("vidéo") ? "video" : "pdf"}`}>{resource.type.toLowerCase().includes("vidéo") ? <Video size={18} /> : <FileText size={18} />}</span><span><strong>{resource.name}</strong><small>{resource.type} · {resource.detail}</small></span><button className="icon-button" onClick={() => setResources(resources.filter((_, resourceIndex) => resourceIndex !== index))}><Trash2 size={16} /></button></div>)}</div></section><footer><button className="secondary-button" onClick={onClose}>Fermer</button><button className="primary-button" onClick={onClose}><Save size={16} /> Enregistrer le module</button></footer></div></Modal>;
+  const [feedback, setFeedback] = useState("");
+  const addVideo = async (event: FormEvent) => { event.preventDefault(); if (!videoUrl) return; setFeedback(""); try { if (usesNetlifyIdentity()) { const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add-video-link", moduleId: `${course.id}-module-1`, url: videoUrl, name: "Vidéo principale" }) }); if (!response.ok) throw new Error("Le lien n’a pas pu être enregistré."); } setResources([...resources, { name: videoUrl, type: "Lien vidéo", detail: "Externe" }]); setVideoUrl(""); setFeedback("Lien vidéo enregistré."); } catch (caught) { setFeedback(caught instanceof Error ? caught.message : "Enregistrement impossible"); } };
+  const addFile = async (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; setUploading(true); setFeedback(""); if (usesNetlifyIdentity()) { try { const form = new FormData(); form.append("file", file); form.append("moduleId", `${course.id}-module-1`); const response = await fetch("/.netlify/functions/upload", { method: "POST", body: form }); if (!response.ok) throw new Error("Import impossible"); } catch (caught) { setFeedback(caught instanceof Error ? caught.message : "Import impossible"); setUploading(false); return; } } setResources([...resources, { name: file.name, type: file.type.includes("pdf") ? "PDF" : "Document", detail: `${(file.size / 1024 / 1024).toFixed(1)} Mo` }]); setFeedback("Fichier importé et relié au module."); setUploading(false); };
+  return <Modal title={`Contenu · ${course.title}`} onClose={onClose} wide><div className="content-manager"><section><span className="form-section-title"><Video size={17} /> Ajouter un lien vidéo</span><form className="inline-form" onSubmit={addVideo}><span><Link2 size={16} /><input type="url" value={videoUrl} onChange={(event) => setVideoUrl(event.target.value)} placeholder="https://youtube.com/… ou https://vimeo.com/…" /></span><button className="primary-button" type="submit">Ajouter</button></form></section><section><span className="form-section-title"><FileUp size={17} /> Importer un contenu</span><label className="upload-zone"><UploadCloud size={28} /><strong>{uploading ? "Import en cours…" : "Déposez ou sélectionnez un fichier"}</strong><small>PDF, DOCX, PPTX, MP4 · 50 Mo maximum</small><input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,video/mp4" onChange={addFile} disabled={uploading} /></label></section>{feedback && <p className="content-feedback" role="status">{feedback}</p>}<section><span className="form-section-title"><LibraryBig size={17} /> Contenu du module</span><div className="managed-resources">{resources.map((resource, index) => <div key={`${resource.name}-${index}`}><span className={`resource-icon ${resource.type.toLowerCase().includes("vidéo") ? "video" : "pdf"}`}>{resource.type.toLowerCase().includes("vidéo") ? <Video size={18} /> : <FileText size={18} />}</span><span><strong>{resource.name}</strong><small>{resource.type} · {resource.detail}</small></span><button className="icon-button" onClick={() => setResources(resources.filter((_, resourceIndex) => resourceIndex !== index))}><Trash2 size={16} /></button></div>)}</div></section><footer><button className="secondary-button" onClick={onClose}>Fermer</button><button className="primary-button" onClick={onClose}><Save size={16} /> Enregistrer le module</button></footer></div></Modal>;
 }
 
 function QuizzesView() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [created, setCreated] = useState(0);
-  return <><section className="page-heading"><div><span className="eyebrow">Évaluation des acquis</span><h1>QCM & évaluations</h1><p>Composez vos questionnaires, fixez un seuil de réussite et analysez les scores.</p></div><button className="primary-button" onClick={() => setBuilderOpen(true)}><Plus size={17} /> Créer un QCM</button></section>{created > 0 && <div className="success-banner"><CheckCircle2 size={18} /> Nouveau QCM enregistré comme brouillon.</div>}<div className="quiz-admin-grid">{courses.slice(0, 4).map((course, index) => <article className="panel quiz-admin-card" key={course.id}><div className={`quiz-card-icon tone-${course.accent}`}><FileQuestion size={25} /></div><span className="status-tag status-active">{index === 3 ? "Brouillon" : "Publié"}</span><h2>{course.title}</h2><p>{[10, 8, 12, 6][index]} questions · Seuil de réussite {index === 1 ? 70 : 80} %</p><div className="quiz-stats"><div><strong>{[82, 76, 91, 0][index]}</strong><span>Participants</span></div><div><strong>{[88, 79, 93, 0][index]} %</strong><span>Score moyen</span></div></div><footer><button className="secondary-button"><Edit3 size={15} /> Modifier</button><button className="icon-button"><MoreHorizontal size={17} /></button></footer></article>)}</div>{builderOpen && <QuizBuilder onClose={() => setBuilderOpen(false)} onSave={() => { setCreated(created + 1); setBuilderOpen(false); }} />}</>;
+  const [items, setItems] = useState<Array<{ id: string; courseTitle: string; questionCount: number; threshold: number; published: boolean; participants: number; averageScore: number }>>([]);
+  useEffect(() => {
+    if (!usesNetlifyIdentity()) return;
+    void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { quizStats?: Array<Record<string, unknown>> }) => setItems((data.quizStats ?? []).map((item) => ({ id: String(item.id), courseTitle: String(item.course_title ?? "Formation"), questionCount: Number(item.question_count ?? 0), threshold: Number(item.pass_threshold ?? 80), published: Boolean(item.published), participants: Number(item.participants ?? 0), averageScore: Number(item.average_score ?? 0) })))).catch(() => undefined);
+  }, [created]);
+  return <><section className="page-heading"><div><span className="eyebrow">Évaluation des acquis</span><h1>QCM & évaluations</h1><p>Composez vos questionnaires, importez le format JSON et analysez les scores.</p></div><div className="heading-actions"><a className="secondary-button button-link" href="/modeles/qcm-walyah-exemple.json" download><Download size={16} /> Modèle JSON</a><button className="primary-button" onClick={() => setBuilderOpen(true)}><Plus size={17} /> Créer un QCM</button></div></section>{created > 0 && <div className="success-banner"><CheckCircle2 size={18} /> Nouveau QCM enregistré comme brouillon.</div>}{items.length ? <div className="quiz-admin-grid">{items.map((item, index) => <article className="panel quiz-admin-card" key={item.id}><div className={`quiz-card-icon tone-${(["teal", "blue", "violet", "coral"] as const)[index % 4]}`}><FileQuestion size={25} /></div><span className={`status-tag ${item.published ? "status-active" : "status-draft"}`}>{item.published ? "Publié" : "Brouillon"}</span><h2>{item.courseTitle}</h2><p>{item.questionCount} question{item.questionCount > 1 ? "s" : ""} · Seuil de réussite {item.threshold} %</p><div className="quiz-stats"><div><strong>{item.participants}</strong><span>Participants</span></div><div><strong>{item.averageScore} %</strong><span>Score moyen</span></div></div></article>)}</div> : <section className="panel learner-empty-state compact-empty"><span className="empty-icon"><FileQuestion size={28} /></span><h2>Aucun QCM enregistré</h2><p>Créez le premier questionnaire ou importez le modèle JSON fourni.</p></section>}{builderOpen && <QuizBuilder onClose={() => setBuilderOpen(false)} onSave={() => { setCreated(created + 1); setBuilderOpen(false); }} />}</>;
 }
 
 function QuizBuilder({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
-  const [title, setTitle] = useState(""); const [question, setQuestion] = useState(""); const [options, setOptions] = useState(["", "", "", ""]); const [correct, setCorrect] = useState(0); const [threshold, setThreshold] = useState("80");
-  const updateOption = (index: number, value: string) => setOptions(options.map((option, optionIndex) => optionIndex === index ? value : option));
+  type DraftQuestion = { prompt: string; options: string[]; correct: number; explanation: string };
+  const emptyQuestion = (): DraftQuestion => ({ prompt: "", options: ["", "", "", ""], correct: 0, explanation: "" });
+  const [title, setTitle] = useState("");
+  const [courseId, setCourseId] = useState(courses[0].id);
+  const [threshold, setThreshold] = useState("80");
+  const [questions, setQuestions] = useState<DraftQuestion[]>([emptyQuestion()]);
+  const [error, setError] = useState("");
+  const updateQuestion = (index: number, updates: Partial<DraftQuestion>) => setQuestions(questions.map((item, itemIndex) => itemIndex === index ? { ...item, ...updates } : item));
+  const updateOption = (questionIndex: number, optionIndex: number, value: string) => updateQuestion(questionIndex, { options: questions[questionIndex].options.map((option, index) => index === optionIndex ? value : option) });
+  const importJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]; if (!file) return; setError("");
+    try {
+      const payload = JSON.parse(await file.text()) as { title?: string; courseId?: string; threshold?: number; questions?: DraftQuestion[] };
+      if (!Array.isArray(payload.questions) || payload.questions.length === 0) throw new Error("Le fichier ne contient aucune question.");
+      const normalized = payload.questions.map((item) => ({ prompt: String(item.prompt ?? ""), options: Array.isArray(item.options) && item.options.length >= 2 ? item.options.slice(0, 6).map(String) : ["", ""], correct: Number(item.correct ?? 0), explanation: String(item.explanation ?? "") }));
+      setTitle(String(payload.title ?? "")); setCourseId(String(payload.courseId ?? courses[0].id)); setThreshold(String(payload.threshold ?? 80)); setQuestions(normalized);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Format JSON invalide"); }
+  };
   const submit = async (event: FormEvent) => {
-    event.preventDefault();
+    event.preventDefault(); setError("");
     if (usesNetlifyIdentity()) {
       try {
-        await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create-quiz", courseId: "hygiene-mains", title, threshold: Number(threshold), question, options, correct }) });
-      } catch { /* Keep the draft available in the current session. */ }
+        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create-quiz", courseId, title, threshold: Number(threshold), questions }) });
+        const data = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(data.error || "Enregistrement impossible");
+      } catch (caught) { setError(caught instanceof Error ? caught.message : "Enregistrement impossible"); return; }
     }
     onSave();
   };
-  return <Modal title="Créer un QCM" onClose={onClose} wide><form className="quiz-builder modal-form" onSubmit={submit}><div className="form-grid"><label>Titre du QCM<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Évaluation finale" required /></label><label>Seuil de réussite<select value={threshold} onChange={(event) => setThreshold(event.target.value)}><option value="60">60 %</option><option value="70">70 %</option><option value="80">80 %</option><option value="90">90 %</option></select></label></div><section className="builder-question"><div className="builder-question-head"><span>Question 1</span><span>Une seule bonne réponse</span></div><label>Intitulé<textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Saisissez votre question…" rows={3} required /></label><div className="builder-options">{options.map((option, index) => <label key={index} className={correct === index ? "correct" : ""}><input type="radio" name="correct" checked={correct === index} onChange={() => setCorrect(index)} /><span>{String.fromCharCode(65 + index)}</span><input value={option} onChange={(event) => updateOption(index, event.target.value)} placeholder={`Réponse ${index + 1}`} required /></label>)}</div></section><button type="button" className="secondary-button add-question"><Plus size={16} /> Ajouter une question</button><footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit"><Save size={16} /> Enregistrer le QCM</button></footer></form></Modal>;
+  return <Modal title="Créer un QCM" onClose={onClose} wide><form className="quiz-builder modal-form" onSubmit={submit}><div className="form-grid"><label>Titre du QCM<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Évaluation finale" required /></label><label>Formation<select value={courseId} onChange={(event) => setCourseId(event.target.value)}>{courses.map((course) => <option value={course.id} key={course.id}>{course.code} · {course.title}</option>)}</select></label><label>Seuil de réussite<select value={threshold} onChange={(event) => setThreshold(event.target.value)}><option value="60">60 %</option><option value="70">70 %</option><option value="80">80 %</option><option value="90">90 %</option></select></label><label className="quiz-import">Importer le format JSON<span><FileUp size={16} /> Sélectionner un fichier<input type="file" accept="application/json,.json" onChange={importJson} /></span></label></div>{error && <p className="form-message" role="alert">{error}</p>}<div className="builder-question-list">{questions.map((question, questionIndex) => <section className="builder-question" key={questionIndex}><div className="builder-question-head"><span>Question {questionIndex + 1}</span><span>Une seule bonne réponse</span>{questions.length > 1 && <button type="button" className="icon-button" aria-label="Supprimer la question" onClick={() => setQuestions(questions.filter((_, index) => index !== questionIndex))}><Trash2 size={15} /></button>}</div><label>Intitulé<textarea value={question.prompt} onChange={(event) => updateQuestion(questionIndex, { prompt: event.target.value })} placeholder="Saisissez votre question…" rows={2} required /></label><div className="builder-options">{question.options.map((option, optionIndex) => <label key={optionIndex} className={question.correct === optionIndex ? "correct" : ""}><input type="radio" name={`correct-${questionIndex}`} checked={question.correct === optionIndex} onChange={() => updateQuestion(questionIndex, { correct: optionIndex })} /><span>{String.fromCharCode(65 + optionIndex)}</span><input value={option} onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)} placeholder={`Réponse ${optionIndex + 1}`} required /></label>)}</div><label>Explication après réponse<textarea value={question.explanation} onChange={(event) => updateQuestion(questionIndex, { explanation: event.target.value })} placeholder="Pourquoi cette réponse est-elle correcte ?" rows={2} /></label></section>)}</div><button type="button" className="secondary-button add-question" onClick={() => setQuestions([...questions, emptyQuestion()])}><Plus size={16} /> Ajouter une question</button><footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit"><Save size={16} /> Enregistrer {questions.length} question{questions.length > 1 ? "s" : ""}</button></footer></form></Modal>;
 }
 
 function ActivityView() {
-  const logs = [
-    ["Arielle Ndong", "AN", "Aujourd’hui, 08:42", "Libreville", "Chrome · Windows", "Connexion réussie"],
-    ["Sarah Bekale", "SB", "Aujourd’hui, 08:35", "Libreville", "Safari · iPhone", "Connexion réussie"],
-    ["Marc Obame", "MO", "Aujourd’hui, 07:58", "Owendo", "Chrome · Android", "Connexion réussie"],
-    ["Carène Moussavou", "CM", "Hier, 17:21", "Libreville", "Edge · Windows", "Connexion réussie"],
-    ["Dimitri Essono", "DE", "16 août, 11:04", "Akanda", "Chrome · Windows", "Session expirée"],
-    ["Franck Mouketou", "FM", "8 août, 15:49", "Libreville", "Firefox · Windows", "Connexion réussie"],
-  ];
-  return <><section className="page-heading"><div><span className="eyebrow">Traçabilité</span><h1>Journal des connexions</h1><p>Consultez les dernières activités d’accès et repérez rapidement les comptes inactifs.</p></div><button className="secondary-button"><Download size={17} /> Exporter le journal</button></section><section className="metric-grid admin-metrics compact-metrics"><article className="metric-card"><div className="metric-icon tone-teal-soft"><UsersRound size={21} /></div><div><span>Connectés aujourd’hui</span><strong>86</strong><small>61 % des apprenants</small></div></article><article className="metric-card"><div className="metric-icon tone-blue-soft"><Clock3 size={21} /></div><div><span>Durée moyenne</span><strong>24 min</strong><small>par session</small></div></article><article className="metric-card"><div className="metric-icon tone-violet-soft"><TrendingUp size={21} /></div><div><span>Connexions sur 7 jours</span><strong>438</strong><small className="positive">+14 %</small></div></article><article className="metric-card"><div className="metric-icon tone-coral-soft"><CircleHelp size={21} /></div><div><span>Comptes inactifs</span><strong>6</strong><small className="warning">depuis 14 jours</small></div></article></section><section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input placeholder="Rechercher dans le journal…" /></label><select><option>7 derniers jours</option><option>30 derniers jours</option><option>90 derniers jours</option></select></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Utilisateur</th><th>Date et heure</th><th>Localisation</th><th>Appareil</th><th>Événement</th></tr></thead><tbody>{logs.map((log) => <tr key={`${log[0]}-${log[2]}`}><td><span className="person-cell"><span className="avatar avatar-dark">{log[1]}</span><strong>{log[0]}</strong></span></td><td>{log[2]}</td><td>{log[3]}</td><td>{log[4]}</td><td><span className={`status-tag ${log[5].includes("réussie") ? "status-actif" : "status-relancer"}`}>{log[5]}</span></td></tr>)}</tbody></table></div></section></>;
+  const [logs, setLogs] = useState<string[][]>([]);
+  const [loginsToday, setLoginsToday] = useState(0);
+  const [activeUsers, setActiveUsers] = useState(0);
+  const [inactiveUsers, setInactiveUsers] = useState(0);
+  const [loading, setLoading] = useState(() => usesNetlifyIdentity());
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (!usesNetlifyIdentity()) return;
+    void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { totals?: Record<string, number>; recentLogins?: Array<Record<string, unknown>> }) => {
+      setLoginsToday(data.totals?.logins_today ?? 0);
+      setActiveUsers(data.totals?.active_users_7d ?? 0);
+      setInactiveUsers(data.totals?.inactive_users ?? 0);
+      setLogs((data.recentLogins ?? []).map((item) => { const email = String(item.email ?? "Utilisateur"); const when = new Date(String(item.occurred_at)); const metadata = (item.metadata ?? {}) as Record<string, unknown>; return [email, initialsFrom(email), when.toLocaleDateString("fr-FR") + " · " + when.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), String(metadata.location ?? "—"), String(metadata.device ?? "Navigateur web"), String(item.event_type ?? "login") === "login" ? "Connexion réussie" : String(item.event_type)]; }));
+    }).catch(() => setLoadError("Le journal des connexions n’a pas pu être chargé.")).finally(() => setLoading(false));
+  }, []);
+  const exportLogs = () => { const csv = [["Utilisateur", "Date", "Localisation", "Appareil", "Événement"], ...logs.map((item) => [item[0], item[2], item[3], item[4], item[5]])].map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n"); const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = "journal-connexions-walyah.csv"; link.click(); URL.revokeObjectURL(url); };
+  return <>
+    <section className="page-heading"><div><span className="eyebrow">Traçabilité</span><h1>Journal des connexions</h1><p>Consultez les dernières activités d’accès et repérez rapidement les comptes inactifs.</p></div><button className="secondary-button" onClick={exportLogs} disabled={!logs.length}><Download size={17} /> Exporter le journal</button></section>
+    {loadError && <div className="form-message" role="alert">{loadError}</div>}
+    <section className="metric-grid admin-metrics compact-metrics">
+      <article className="metric-card"><div className="metric-icon tone-teal-soft"><UsersRound size={21} /></div><div><span>Connexions aujourd’hui</span><strong>{loginsToday}</strong><small>événements enregistrés</small></div></article>
+      <article className="metric-card"><div className="metric-icon tone-blue-soft"><Clock3 size={21} /></div><div><span>Utilisateurs actifs</span><strong>{activeUsers}</strong><small>sur les 7 derniers jours</small></div></article>
+      <article className="metric-card"><div className="metric-icon tone-violet-soft"><TrendingUp size={21} /></div><div><span>Événements affichés</span><strong>{logs.length}</strong><small>journal actualisé</small></div></article>
+      <article className="metric-card"><div className="metric-icon tone-coral-soft"><CircleHelp size={21} /></div><div><span>Comptes inactifs</span><strong>{inactiveUsers}</strong><small className="warning">à contrôler</small></div></article>
+    </section>
+    <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input placeholder="Rechercher dans le journal…" /></label><select><option>7 derniers jours</option><option>30 derniers jours</option><option>90 derniers jours</option></select></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Utilisateur</th><th>Date et heure</th><th>Localisation</th><th>Appareil</th><th>Événement</th></tr></thead><tbody>{logs.map((log) => <tr key={`${log[0]}-${log[2]}`}><td><span className="person-cell"><span className="avatar avatar-dark">{log[1]}</span><strong>{log[0]}</strong></span></td><td>{log[2]}</td><td>{log[3]}</td><td>{log[4]}</td><td><span className={`status-tag ${log[5].includes("réussie") ? "status-actif" : "status-relancer"}`}>{log[5]}</span></td></tr>)}{logs.length === 0 && <tr><td colSpan={5}><div className="table-empty"><Clock3 size={22} /><strong>{loading ? "Chargement du journal…" : "Aucune connexion enregistrée"}</strong><span>Les connexions réelles apparaîtront ici.</span></div></td></tr>}</tbody></table></div></section>
+  </>;
 }
 
-function SettingsView({ session }: { session: Session }) {
-  const [saved, setSaved] = useState(false);
-  return <><section className="page-heading"><div><span className="eyebrow">Configuration</span><h1>{session.role === "admin" ? "Paramètres de la plateforme" : "Mon profil"}</h1><p>Gérez vos informations, vos préférences et les réglages de notification.</p></div></section>{saved && <div className="success-banner"><CheckCircle2 size={18} /> Vos modifications ont été enregistrées.</div>}<section className="settings-grid"><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Compte</span><h3>Informations générales</h3></div><span className="avatar avatar-dark large-avatar">{session.initials}</span></div><form className="modal-form" onSubmit={(event) => { event.preventDefault(); setSaved(true); }}><label>Nom complet<input defaultValue={session.name} /></label><label>Adresse e-mail<input type="email" defaultValue={session.email} /></label><label>Fonction<input defaultValue={session.role === "admin" ? "Administrateur formation" : "Chargée d’accueil"} /></label><label>Service<select defaultValue={session.role === "admin" ? "Administration" : "Accueil"}><option>Administration</option><option>Accueil</option><option>Laboratoire</option><option>Imagerie</option><option>Optique</option></select></label><button className="primary-button" type="submit"><Save size={16} /> Enregistrer</button></form></article><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Préférences</span><h3>Notifications</h3></div><Bell size={20} /></div><div className="toggle-list"><label><span><strong>Nouvelles formations</strong><small>Être informé lors d’une nouvelle assignation.</small></span><input type="checkbox" defaultChecked /></label><label><span><strong>Rappels d’échéance</strong><small>Recevoir un rappel 7 jours avant la date limite.</small></span><input type="checkbox" defaultChecked /></label><label><span><strong>Résultats et certificats</strong><small>Recevoir une confirmation après validation.</small></span><input type="checkbox" defaultChecked /></label><label><span><strong>Résumé hebdomadaire</strong><small>{session.role === "admin" ? "Recevoir les indicateurs de pilotage." : "Recevoir le bilan de votre progression."}</small></span><input type="checkbox" /></label></div></article></section></>;
+function SettingsView({ session, profile }: { session: Session; profile: LearnerProfile | null }) {
+  const isStaff = session.role !== "learner";
+  return <><section className="page-heading"><div><span className="eyebrow">Configuration</span><h1>{isStaff ? "Paramètres de la plateforme" : "Mon profil"}</h1><p>Consultez l’identité et le niveau d’accès reconnus par la plateforme.</p></div>{session.role === "super_admin" && <span className="count-badge"><ShieldCheck size={15} /> Super-administration active</span>}</section><section className="settings-grid"><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Compte</span><h3>Informations générales</h3></div><span className="avatar avatar-dark large-avatar">{session.initials}</span></div><dl className="account-summary"><div><dt>Nom complet</dt><dd>{profile?.fullName || session.name}</dd></div><div><dt>Adresse e-mail</dt><dd>{profile?.email || session.email}</dd></div><div><dt>Fonction</dt><dd>{isStaff ? roleLabel(session.role) : profile?.jobTitle || "Non renseignée"}</dd></div><div><dt>Service</dt><dd>{isStaff ? "Administration de la plateforme" : profile?.department || "Non renseigné"}</dd></div></dl><div className="neutral-note"><ShieldCheck size={17} /><span><strong>Informations issues du compte sécurisé</strong><small>Les changements d’identité et de rôle sont tracés par l’administration.</small></span></div></article><article className="panel settings-card"><div className="panel-heading"><div><span className="eyebrow">Notifications</span><h3>Événements suivis</h3></div><Bell size={20} /></div><div className="notification-summary"><span><CheckCircle2 size={18} /><span><strong>Nouvelles affectations</strong><small>Notification lors de l’ajout d’une formation.</small></span></span><span><CheckCircle2 size={18} /><span><strong>Échéances</strong><small>Rappel avant une date limite définie.</small></span></span><span><CheckCircle2 size={18} /><span><strong>Résultats</strong><small>Confirmation après validation et certificat.</small></span></span></div></article></section>{session.role === "super_admin" && <section className="panel superadmin-card"><div><span className="eyebrow">Gouvernance des accès</span><h2>Rôles administratifs</h2><p>Les rôles sensibles sont attribués dans Netlify Identity, puis vérifiés à nouveau par les fonctions serveur avant chaque opération protégée.</p></div><div className="role-matrix"><span><strong>Super-administrateur</strong><small>Accès complet, rôles, intégrations et audit</small></span><span><strong>Administrateur</strong><small>Apprenants, contenus, QCM et suivi</small></span><span><strong>Apprenant</strong><small>Uniquement les parcours qui lui sont assignés</small></span></div></section>}</>;
 }
 
-export default function LmsApp() {
-  const [session, setSession] = useState<Session | null>(null);
+export default function LmsApp({ initialSession = null }: { initialSession?: Session | null }) {
+  const [session, setSession] = useState<Session | null>(initialSession);
+  const [learnerWorkspace, setLearnerWorkspace] = useState<LearnerWorkspace>({ loading: Boolean(initialSession?.role === "learner"), error: "", courses: [], certificates: [], activity: [], profile: null });
   const [view, setView] = useState<View>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [selectedLearner, setSelectedLearner] = useState<Learner | null>(null);
   const [quizMode, setQuizMode] = useState(false);
 
   useEffect(() => {
@@ -423,39 +823,63 @@ export default function LmsApp() {
         await identity.handleAuthCallback();
         const user = await identity.getUser();
         if (!user) return;
-        const candidate = user as unknown as { email?: string; roles?: string[]; userMetadata?: { fullName?: string; full_name?: string }; user_metadata?: { full_name?: string } };
-        const name = candidate.userMetadata?.fullName || candidate.userMetadata?.full_name || candidate.user_metadata?.full_name || candidate.email || "Apprenant";
-        setSession({ name, email: candidate.email || "", initials: initialsFrom(name), role: candidate.roles?.includes("admin") ? "admin" : "learner", isDemo: false });
+        const candidate = user as unknown as { email?: string; name?: string; roles?: string[]; userMetadata?: Record<string, unknown> };
+        const name = candidate.name || String(candidate.userMetadata?.full_name ?? "") || candidate.email || "Apprenant";
+        const role = roleFromClaims(candidate.roles);
+        if (role === "learner") setLearnerWorkspace({ loading: true, error: "", courses: [], certificates: [], activity: [], profile: null });
+        setSession({ name, email: candidate.email || "", initials: initialsFrom(name), role, authProvider: "netlify" });
       } catch { /* The explicit sign-in form remains available. */ }
     });
   }, []);
 
+  useEffect(() => {
+    if (!session || session.role !== "learner" || !usesNetlifyIdentity()) return;
+    void fetch("/.netlify/functions/lms-data").then(async (response) => {
+      const data = await response.json() as { error?: string; profile?: Record<string, unknown>; courses?: Array<Record<string, unknown>>; certificates?: Array<Record<string, unknown>>; activity?: Array<Record<string, unknown>> };
+      if (!response.ok) throw new Error(data.error || "Chargement impossible");
+      const profile = data.profile ? { fullName: String(data.profile.full_name ?? session.name), email: String(data.profile.email ?? session.email), department: String(data.profile.department ?? ""), jobTitle: String(data.profile.job_title ?? "") } : null;
+      setLearnerWorkspace({
+        loading: false, error: "", profile,
+        courses: (data.courses ?? []).map(courseFromRow),
+        certificates: (data.certificates ?? []).map((item) => ({ certificateNumber: String(item.certificate_number), courseId: String(item.course_id), courseCode: String(item.course_code ?? "WA"), courseTitle: String(item.course_title ?? "Formation"), score: item.score === null || item.score === undefined ? null : Number(item.score), issuedAt: String(item.issued_at ?? "") })),
+        activity: (data.activity ?? []).map((item) => ({ type: String(item.event_type ?? "event"), summary: String(item.summary ?? "Activité enregistrée"), occurredAt: String(item.occurred_at ?? "") })),
+      });
+    }).catch((error) => setLearnerWorkspace({ loading: false, error: error instanceof Error ? error.message : "Chargement impossible", courses: [], certificates: [], activity: [], profile: null }));
+  }, [session]);
+
   const content = useMemo(() => {
     if (!session) return null;
+    if (selectedLearner) return <LearnerProfileView learner={selectedLearner} onBack={() => setSelectedLearner(null)} />;
     if (selectedCourse) {
       if (quizMode) return <QuizView course={selectedCourse} onBack={() => setQuizMode(false)} />;
       return <CourseDetail course={selectedCourse} onBack={() => { setSelectedCourse(null); setView("catalogue"); }} onQuiz={() => setQuizMode(true)} />;
     }
     switch (view) {
-      case "dashboard": return session.role === "admin" ? <AdminDashboard onView={setView} /> : <LearnerDashboard onView={setView} onCourse={setSelectedCourse} />;
-      case "catalogue": return <CatalogueView onCourse={setSelectedCourse} />;
-      case "certificates": return <CertificatesView />;
-      case "users": return <UsersView />;
+      case "dashboard": return session.role !== "learner" ? <AdminDashboard onView={setView} /> : <LearnerDashboard name={session.name} workspace={learnerWorkspace} onView={setView} onCourse={setSelectedCourse} />;
+      case "catalogue": return <CatalogueView assignedCourses={learnerWorkspace.courses} loading={learnerWorkspace.loading} onCourse={setSelectedCourse} />;
+      case "catalog": return <FullCatalogueView onCourse={setSelectedCourse} />;
+      case "certificates": return <CertificatesView name={session.name} certificates={learnerWorkspace.certificates} loading={learnerWorkspace.loading} />;
+      case "users": return <UsersView onLearner={setSelectedLearner} />;
       case "trainings": return <TrainingsView />;
       case "quizzes": return <QuizzesView />;
       case "activity": return <ActivityView />;
-      case "settings": return <SettingsView session={session} />;
+      case "settings": return <SettingsView session={session} profile={learnerWorkspace.profile} />;
       default: return null;
     }
-  }, [quizMode, selectedCourse, session, view]);
+  }, [learnerWorkspace, quizMode, selectedCourse, selectedLearner, session, view]);
 
   const logoutSession = async () => {
-    if (session && !session.isDemo && usesNetlifyIdentity()) {
+    if (session?.authProvider === "netlify" && usesNetlifyIdentity()) {
       try { const identity = await import("@netlify/identity"); await identity.logout(); } catch { /* Clear local UI even if the request fails. */ }
     }
-    setSession(null); setView("dashboard"); setSelectedCourse(null); setQuizMode(false);
+    setSession(null); setView("dashboard"); setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setLearnerWorkspace({ loading: false, error: "", courses: [], certificates: [], activity: [], profile: null });
   };
 
-  if (!session) return <AuthScreen onAuthenticated={setSession} />;
-  return <div className="app-shell"><Sidebar role={session.role} view={view} onView={(next) => { setSelectedCourse(null); setQuizMode(false); setView(next); }} open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="app-main"><Topbar session={session} onMenu={() => setSidebarOpen(true)} onLogout={logoutSession} /><main className="page-content">{content}</main></div></div>;
+  const authenticateSession = (nextSession: Session) => {
+    setLearnerWorkspace(nextSession.role === "learner" ? { loading: true, error: "", courses: [], certificates: [], activity: [], profile: null } : { loading: false, error: "", courses: [], certificates: [], activity: [], profile: null });
+    setSession(nextSession);
+  };
+
+  if (!session) return <AuthScreen onAuthenticated={authenticateSession} />;
+  return <div className="app-shell"><Sidebar role={session.role} view={view} onView={(next) => { setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setView(next); }} open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="app-main"><Topbar session={session} onMenu={() => setSidebarOpen(true)} onLogout={logoutSession} /><main className="page-content">{content}</main></div></div>;
 }

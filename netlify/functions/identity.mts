@@ -14,14 +14,6 @@ const identityHandlers = {
       VALUES (${id}, ${email}, ${fullName}, ${"learner"})
       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name
     `;
-    await db.sql`
-      INSERT INTO enrollments (id, user_id, course_id)
-      SELECT ${id} || ':' || c.id, ${id}, c.id
-      FROM courses c
-      WHERE c.published = TRUE
-      ON CONFLICT (user_id, course_id) DO NOTHING
-    `;
-
     return {
       user: {
         ...event.user,
@@ -37,9 +29,18 @@ const identityHandlers = {
     const db = getDatabase();
     const id = event.user.id;
     const email = event.user.email ?? "";
+    const userMetadata = event.user.userMetadata as { fullName?: string; full_name?: string } | undefined;
+    const appMetadata = event.user.appMetadata as { roles?: string[] } | undefined;
+    const roles = appMetadata?.roles ?? [];
+    const role = roles.includes("super_admin") ? "super_admin" : roles.includes("admin") ? "admin" : "learner";
+    const fullName = userMetadata?.fullName ?? userMetadata?.full_name ?? email.split("@")[0] ?? "Utilisateur";
     const eventId = crypto.randomUUID();
 
-    await db.sql`UPDATE users SET last_login_at = NOW() WHERE id = ${id}`;
+    await db.sql`
+      INSERT INTO users (id, email, full_name, role, last_login_at)
+      VALUES (${id}, ${email}, ${fullName}, ${role}, NOW())
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, role = EXCLUDED.role, last_login_at = NOW()
+    `;
     await db.sql`
       INSERT INTO login_events (id, user_id, email, event_type)
       VALUES (${eventId}, ${id}, ${email}, ${"login"})

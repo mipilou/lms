@@ -1,0 +1,18 @@
+{
+  "title": "Évaluation finale — Exemple",
+  "courseId": "hygiene-mains",
+  "threshold": 80,
+  "questions": [
+    {
+      "prompt": "Quelle pratique est recommandée dans cette situation ?",
+      "options": [
+        "Réponse A",
+        "Réponse B",
+        "Réponse C",
+        "Réponse D"
+      ],
+      "correct": 1,
+      "explanation": "Expliquez ici pourquoi la réponse B est correcte."
+    }
+  ]
+}

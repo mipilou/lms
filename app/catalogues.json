@@ -1,0 +1,1652 @@
+{
+  "generatedAt": "2026-08-20",
+  "totals": {
+    "complete": 124,
+    "medical": 20,
+    "all": 144
+  },
+  "complete": [
+    {
+      "code": "SS-T01",
+      "title": "Accueil et premier contact avec le patient",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à accueil et premier contact avec le patient afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T02",
+      "title": "Communication professionnelle interne et externe",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à communication professionnelle interne et externe afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T03",
+      "title": "Gestion des émotions et intelligence émotionnelle",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à gestion des émotions et intelligence émotionnelle afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T04",
+      "title": "Travail en équipe et coopération inter-services",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à travail en équipe et coopération inter-services afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T05",
+      "title": "Éthique professionnelle et secret médical",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à éthique professionnelle et secret médical afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T06",
+      "title": "Gestion du stress en milieu médical",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à gestion du stress en milieu médical afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T07",
+      "title": "Ponctualité, tenue et comportement professionnel",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à ponctualité, tenue et comportement professionnel afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T08",
+      "title": "Bienveillance et empathie envers le patient",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à bienveillance et empathie envers le patient afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T09",
+      "title": "Gestion des conflits et désamorçage",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à gestion des conflits et désamorçage afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-T10",
+      "title": "Hygiène, présentation et image de la clinique",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Tous collaborateurs",
+      "description": "Développer les comportements professionnels liés à hygiène, présentation et image de la clinique afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Softskills transversaux - Tous collaborateurs",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-MD01",
+      "title": "Annonce de diagnostic et communication clinique",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Médecins, biologistes",
+      "description": "Renforcer la maîtrise opérationnelle de annonce de diagnostic et communication clinique avec des méthodes directement applicables par médecins, biologistes.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-MD02",
+      "title": "Actualisation des protocoles diagnostiques",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Médecins, biologistes",
+      "description": "Renforcer la maîtrise opérationnelle de actualisation des protocoles diagnostiques avec des méthodes directement applicables par médecins, biologistes.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-MD03",
+      "title": "Lecture et interprétation avancée des résultats de labo",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Médecins",
+      "description": "Renforcer la maîtrise opérationnelle de lecture et interprétation avancée des résultats de labo avec des méthodes directement applicables par médecins.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-MD04",
+      "title": "Télémédecine et consultation à distance",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Médecins",
+      "description": "Renforcer la maîtrise opérationnelle de télémédecine et consultation à distance avec des méthodes directement applicables par médecins.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-MD05",
+      "title": "Dossier médical électronique et outils numériques",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Médecins, biologistes",
+      "description": "Renforcer la maîtrise opérationnelle de dossier médical électronique et outils numériques avec des méthodes directement applicables par médecins, biologistes.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-MD01",
+      "title": "Leadership médical et management d’équipe soignante",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Médecins seniors",
+      "description": "Développer les comportements professionnels liés à leadership médical et management d’équipe soignante afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-MD02",
+      "title": "Gestion des situations d’urgence relationnelle",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Médecins",
+      "description": "Développer les comportements professionnels liés à gestion des situations d’urgence relationnelle afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-MD03",
+      "title": "Éthique médicale et droits du patient",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Médecins, biologistes",
+      "description": "Développer les comportements professionnels liés à éthique médicale et droits du patient afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Médecins et biologistes",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-INF01",
+      "title": "Techniques de prélèvement veineux et capillaire",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Infirmiers",
+      "description": "Renforcer la maîtrise opérationnelle de techniques de prélèvement veineux et capillaire avec des méthodes directement applicables par infirmiers.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-INF02",
+      "title": "Administration sécurisée des médicaments",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Infirmiers",
+      "description": "Renforcer la maîtrise opérationnelle de administration sécurisée des médicaments avec des méthodes directement applicables par infirmiers.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-INF03",
+      "title": "Soins infirmiers en contexte d’urgence",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Infirmiers",
+      "description": "Renforcer la maîtrise opérationnelle de soins infirmiers en contexte d’urgence avec des méthodes directement applicables par infirmiers.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-INF04",
+      "title": "Gestion des voies veineuses et perfusions",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Infirmiers",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des voies veineuses et perfusions avec des méthodes directement applicables par infirmiers.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-INF05",
+      "title": "Prévention des infections nosocomiales - hygiène des mains",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Infirmiers",
+      "description": "Renforcer la maîtrise opérationnelle de prévention des infections nosocomiales - hygiène des mains avec des méthodes directement applicables par infirmiers.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-INF06",
+      "title": "Dossier de soins infirmiers et transmissions écrites",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Infirmiers",
+      "description": "Renforcer la maîtrise opérationnelle de dossier de soins infirmiers et transmissions écrites avec des méthodes directement applicables par infirmiers.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-INF01",
+      "title": "Communication thérapeutique avec le patient",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Infirmiers",
+      "description": "Développer les comportements professionnels liés à communication thérapeutique avec le patient afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-INF02",
+      "title": "Gestion de l’anxiété et accompagnement pré/post-examen",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Infirmiers",
+      "description": "Développer les comportements professionnels liés à gestion de l’anxiété et accompagnement pré/post-examen afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Infirmiers et infirmières",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-AS01",
+      "title": "Hygiène des mains et tenue de protection EPI",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Aides-soignants",
+      "description": "Renforcer la maîtrise opérationnelle de hygiène des mains et tenue de protection epi avec des méthodes directement applicables par aides-soignants.",
+      "theme": "Aides-soignants",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-AS02",
+      "title": "Aide à la mobilisation et transfert sécurisé des patients",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Aides-soignants",
+      "description": "Renforcer la maîtrise opérationnelle de aide à la mobilisation et transfert sécurisé des patients avec des méthodes directement applicables par aides-soignants.",
+      "theme": "Aides-soignants",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-AS03",
+      "title": "Aide à la prise des constantes et surveillance clinique",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Aides-soignants",
+      "description": "Renforcer la maîtrise opérationnelle de aide à la prise des constantes et surveillance clinique avec des méthodes directement applicables par aides-soignants.",
+      "theme": "Aides-soignants",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-AS04",
+      "title": "Préparation et installation du patient pour les examens",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Aides-soignants",
+      "description": "Renforcer la maîtrise opérationnelle de préparation et installation du patient pour les examens avec des méthodes directement applicables par aides-soignants.",
+      "theme": "Aides-soignants",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-AS05",
+      "title": "Gestion des déchets médicaux - DASRI",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Aides-soignants",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des déchets médicaux - dasri avec des méthodes directement applicables par aides-soignants.",
+      "theme": "Aides-soignants",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-AS01",
+      "title": "Bientraitance et respect de la dignité du patient",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Aides-soignants",
+      "description": "Développer les comportements professionnels liés à bientraitance et respect de la dignité du patient afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Aides-soignants",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-AS02",
+      "title": "Communication avec les patients et leurs proches",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Aides-soignants",
+      "description": "Développer les comportements professionnels liés à communication avec les patients et leurs proches afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Aides-soignants",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-LAB01",
+      "title": "Techniques d’analyse hématologique et biochimique",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Techniciens de labo",
+      "description": "Renforcer la maîtrise opérationnelle de techniques d’analyse hématologique et biochimique avec des méthodes directement applicables par techniciens de labo.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-LAB02",
+      "title": "Contrôle qualité en biologie médicale - ISO 15189",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Techniciens de labo",
+      "description": "Renforcer la maîtrise opérationnelle de contrôle qualité en biologie médicale - iso 15189 avec des méthodes directement applicables par techniciens de labo.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-LAB03",
+      "title": "Gestion des échantillons : réception, tri, conservation",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Techniciens de labo",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des échantillons : réception, tri, conservation avec des méthodes directement applicables par techniciens de labo.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-LAB04",
+      "title": "Sécurité au laboratoire et gestion des risques biologiques",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Techniciens de labo",
+      "description": "Renforcer la maîtrise opérationnelle de sécurité au laboratoire et gestion des risques biologiques avec des méthodes directement applicables par techniciens de labo.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-LAB05",
+      "title": "Utilisation et maintenance des automates de labo",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Techniciens de labo",
+      "description": "Renforcer la maîtrise opérationnelle de utilisation et maintenance des automates de labo avec des méthodes directement applicables par techniciens de labo.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-LAB06",
+      "title": "Bactériologie et antibiogramme",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Techniciens de labo",
+      "description": "Renforcer la maîtrise opérationnelle de bactériologie et antibiogramme avec des méthodes directement applicables par techniciens de labo.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-LAB07",
+      "title": "Gestion du LIMS - logiciel de gestion de laboratoire",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Techniciens de labo",
+      "description": "Renforcer la maîtrise opérationnelle de gestion du lims - logiciel de gestion de laboratoire avec des méthodes directement applicables par techniciens de labo.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-LAB01",
+      "title": "Communication des résultats critiques au médecin",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Techniciens de labo",
+      "description": "Développer les comportements professionnels liés à communication des résultats critiques au médecin afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-LAB02",
+      "title": "Rigueur, traçabilité et culture qualité",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Techniciens de labo",
+      "description": "Développer les comportements professionnels liés à rigueur, traçabilité et culture qualité afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Personnel de laboratoire",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ACC01",
+      "title": "Maîtrise du logiciel de gestion des admissions",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents accueil & fact.",
+      "description": "Renforcer la maîtrise opérationnelle de maîtrise du logiciel de gestion des admissions avec des méthodes directement applicables par agents accueil & fact..",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ACC02",
+      "title": "Procédures de facturation CNAMGS, CNSS, assurances privées",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Agents accueil & fact.",
+      "description": "Renforcer la maîtrise opérationnelle de procédures de facturation cnamgs, cnss, assurances privées avec des méthodes directement applicables par agents accueil & fact..",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ACC03",
+      "title": "Gestion des dossiers patients et archivage",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents accueil & fact.",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des dossiers patients et archivage avec des méthodes directement applicables par agents accueil & fact..",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ACC04",
+      "title": "Maîtrise des outils bureautiques - Word et Excel",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents accueil & fact.",
+      "description": "Renforcer la maîtrise opérationnelle de maîtrise des outils bureautiques - word et excel avec des méthodes directement applicables par agents accueil & fact..",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ACC05",
+      "title": "Procédures de caisse et gestion des encaissements",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents caisse",
+      "description": "Renforcer la maîtrise opérationnelle de procédures de caisse et gestion des encaissements avec des méthodes directement applicables par agents caisse.",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ACC01",
+      "title": "Hospitalité et accueil VIP en milieu médical",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Agents accueil & fact.",
+      "description": "Développer les comportements professionnels liés à hospitalité et accueil vip en milieu médical afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ACC02",
+      "title": "Gestion des réclamations et situations conflictuelles",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Agents accueil & fact.",
+      "description": "Développer les comportements professionnels liés à gestion des réclamations et situations conflictuelles afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ACC03",
+      "title": "Techniques de communication téléphonique professionnelle",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Agents accueil & fact.",
+      "description": "Développer les comportements professionnels liés à techniques de communication téléphonique professionnelle afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ACC04",
+      "title": "Confidentialité et protection des données patients",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents accueil & fact.",
+      "description": "Développer les comportements professionnels liés à confidentialité et protection des données patients afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents d’accueil et de facturation",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-CC01",
+      "title": "Prise de rendez-vous et gestion des agendas",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Call center",
+      "description": "Renforcer la maîtrise opérationnelle de prise de rendez-vous et gestion des agendas avec des méthodes directement applicables par call center.",
+      "theme": "Agents de call center / téléconseillers",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-CC02",
+      "title": "Outils CRM et logiciels de centres d’appels",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Call center",
+      "description": "Renforcer la maîtrise opérationnelle de outils crm et logiciels de centres d’appels avec des méthodes directement applicables par call center.",
+      "theme": "Agents de call center / téléconseillers",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-CC03",
+      "title": "Protocoles de réponse aux urgences téléphoniques",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Call center",
+      "description": "Renforcer la maîtrise opérationnelle de protocoles de réponse aux urgences téléphoniques avec des méthodes directement applicables par call center.",
+      "theme": "Agents de call center / téléconseillers",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-CC01",
+      "title": "Communication téléphonique excellence et écoute active",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Call center",
+      "description": "Développer les comportements professionnels liés à communication téléphonique excellence et écoute active afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents de call center / téléconseillers",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-CC02",
+      "title": "Gestion des appels difficiles et patients anxieux",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Call center",
+      "description": "Développer les comportements professionnels liés à gestion des appels difficiles et patients anxieux afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents de call center / téléconseillers",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-CC03",
+      "title": "Posture, voix et langage professionnel au téléphone",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Call center",
+      "description": "Développer les comportements professionnels liés à posture, voix et langage professionnel au téléphone afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents de call center / téléconseillers",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-CC04",
+      "title": "Gestion du stress et des volumes d’appels",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Call center",
+      "description": "Développer les comportements professionnels liés à gestion du stress et des volumes d’appels afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents de call center / téléconseillers",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ADM01",
+      "title": "Secrétariat médical et rédaction de courriers",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Personnel admin.",
+      "description": "Renforcer la maîtrise opérationnelle de secrétariat médical et rédaction de courriers avec des méthodes directement applicables par personnel admin..",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ADM02",
+      "title": "Maîtrise avancée d’Excel pour la gestion administrative",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Personnel admin.",
+      "description": "Renforcer la maîtrise opérationnelle de maîtrise avancée d’excel pour la gestion administrative avec des méthodes directement applicables par personnel admin..",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ADM03",
+      "title": "Gestion des ressources humaines de base : contrats, paie",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Responsables RH",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des ressources humaines de base : contrats, paie avec des méthodes directement applicables par responsables rh.",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ADM04",
+      "title": "Comptabilité générale et gestion budgétaire",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Personnel finance",
+      "description": "Renforcer la maîtrise opérationnelle de comptabilité générale et gestion budgétaire avec des méthodes directement applicables par personnel finance.",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ADM05",
+      "title": "Gestion de projet et coordination de services",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Managers, assistants",
+      "description": "Renforcer la maîtrise opérationnelle de gestion de projet et coordination de services avec des méthodes directement applicables par managers, assistants.",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ADM01",
+      "title": "Organisation, planification et gestion des priorités",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Personnel admin.",
+      "description": "Développer les comportements professionnels liés à organisation, planification et gestion des priorités afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ADM02",
+      "title": "Rédaction professionnelle : rapports, comptes-rendus",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Personnel admin.",
+      "description": "Développer les comportements professionnels liés à rédaction professionnelle : rapports, comptes-rendus afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ADM03",
+      "title": "Management et leadership pour encadrants",
+      "axis": "Softskills",
+      "duration": "2j",
+      "audience": "Managers",
+      "description": "Développer les comportements professionnels liés à management et leadership pour encadrants afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Personnel administratif",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-IT01",
+      "title": "Administration des systèmes d’information de santé - SIS",
+      "axis": "Hardskills",
+      "duration": "3j",
+      "audience": "Personnel IT",
+      "description": "Renforcer la maîtrise opérationnelle de administration des systèmes d’information de santé - sis avec des méthodes directement applicables par personnel it.",
+      "theme": "Personnel informatique - IT",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-IT02",
+      "title": "Cybersécurité et protection des données de santé",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Personnel IT",
+      "description": "Renforcer la maîtrise opérationnelle de cybersécurité et protection des données de santé avec des méthodes directement applicables par personnel it.",
+      "theme": "Personnel informatique - IT",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-IT03",
+      "title": "Maintenance du parc informatique et helpdesk",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Personnel IT",
+      "description": "Renforcer la maîtrise opérationnelle de maintenance du parc informatique et helpdesk avec des méthodes directement applicables par personnel it.",
+      "theme": "Personnel informatique - IT",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-IT04",
+      "title": "Gestion des sauvegardes et plan de continuité",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Personnel IT",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des sauvegardes et plan de continuité avec des méthodes directement applicables par personnel it.",
+      "theme": "Personnel informatique - IT",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-IT05",
+      "title": "Administration réseau et sécurité des infrastructures",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Personnel IT",
+      "description": "Renforcer la maîtrise opérationnelle de administration réseau et sécurité des infrastructures avec des méthodes directement applicables par personnel it.",
+      "theme": "Personnel informatique - IT",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-IT01",
+      "title": "Relation client interne et support utilisateurs",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Personnel IT",
+      "description": "Développer les comportements professionnels liés à relation client interne et support utilisateurs afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Personnel informatique - IT",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-IT02",
+      "title": "Pédagogie et formation des utilisateurs aux outils",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Personnel IT",
+      "description": "Développer les comportements professionnels liés à pédagogie et formation des utilisateurs aux outils afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Personnel informatique - IT",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-BR01",
+      "title": "Techniques de brancardage et mobilisation sécurisée",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Brancardiers",
+      "description": "Renforcer la maîtrise opérationnelle de techniques de brancardage et mobilisation sécurisée avec des méthodes directement applicables par brancardiers.",
+      "theme": "Brancardiers et agents de transport interne",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-BR02",
+      "title": "Utilisation sécurisée des fauteuils et brancards",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Brancardiers",
+      "description": "Renforcer la maîtrise opérationnelle de utilisation sécurisée des fauteuils et brancards avec des méthodes directement applicables par brancardiers.",
+      "theme": "Brancardiers et agents de transport interne",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-BR03",
+      "title": "Gestes de premiers secours - SST",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Brancardiers",
+      "description": "Renforcer la maîtrise opérationnelle de gestes de premiers secours - sst avec des méthodes directement applicables par brancardiers.",
+      "theme": "Brancardiers et agents de transport interne",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-BR04",
+      "title": "Hygiène et prévention des contaminations lors du transport",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Brancardiers",
+      "description": "Renforcer la maîtrise opérationnelle de hygiène et prévention des contaminations lors du transport avec des méthodes directement applicables par brancardiers.",
+      "theme": "Brancardiers et agents de transport interne",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-BR01",
+      "title": "Communication respectueuse avec le patient en transit",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Brancardiers",
+      "description": "Développer les comportements professionnels liés à communication respectueuse avec le patient en transit afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Brancardiers et agents de transport interne",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-BR02",
+      "title": "Réactivité, ponctualité et gestion des priorités",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Brancardiers",
+      "description": "Développer les comportements professionnels liés à réactivité, ponctualité et gestion des priorités afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Brancardiers et agents de transport interne",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-SEC01",
+      "title": "Procédures de contrôle d’accès et gestion des badges",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents sécurité",
+      "description": "Renforcer la maîtrise opérationnelle de procédures de contrôle d’accès et gestion des badges avec des méthodes directement applicables par agents sécurité.",
+      "theme": "Agents de sécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-SEC02",
+      "title": "Gestion des urgences et évacuation incendie - SSIAP",
+      "axis": "Hardskills",
+      "duration": "2j",
+      "audience": "Agents sécurité",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des urgences et évacuation incendie - ssiap avec des méthodes directement applicables par agents sécurité.",
+      "theme": "Agents de sécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-SEC03",
+      "title": "Rondes, surveillance et rapports d’incidents",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Agents sécurité",
+      "description": "Renforcer la maîtrise opérationnelle de rondes, surveillance et rapports d’incidents avec des méthodes directement applicables par agents sécurité.",
+      "theme": "Agents de sécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-SEC04",
+      "title": "Premiers secours et gestion de situation critique",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents sécurité",
+      "description": "Renforcer la maîtrise opérationnelle de premiers secours et gestion de situation critique avec des méthodes directement applicables par agents sécurité.",
+      "theme": "Agents de sécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-SEC01",
+      "title": "Accueil sécurisé et orientation des visiteurs",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents sécurité",
+      "description": "Développer les comportements professionnels liés à accueil sécurisé et orientation des visiteurs afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents de sécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-SEC02",
+      "title": "Gestion des personnes agressives ou en détresse",
+      "axis": "Softskills",
+      "duration": "1j",
+      "audience": "Agents sécurité",
+      "description": "Développer les comportements professionnels liés à gestion des personnes agressives ou en détresse afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents de sécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-SEC03",
+      "title": "Posture professionnelle et image de la clinique",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents sécurité",
+      "description": "Développer les comportements professionnels liés à posture professionnelle et image de la clinique afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents de sécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ENT01",
+      "title": "Techniques de bionettoyage en milieu médical",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents entretien",
+      "description": "Renforcer la maîtrise opérationnelle de techniques de bionettoyage en milieu médical avec des méthodes directement applicables par agents entretien.",
+      "theme": "Agents d’entretien et bionettoyage",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ENT02",
+      "title": "Désinfection des surfaces et protocoles zones sensibles",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents entretien",
+      "description": "Renforcer la maîtrise opérationnelle de désinfection des surfaces et protocoles zones sensibles avec des méthodes directement applicables par agents entretien.",
+      "theme": "Agents d’entretien et bionettoyage",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ENT03",
+      "title": "Utilisation et dosage des produits désinfectants",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Agents entretien",
+      "description": "Renforcer la maîtrise opérationnelle de utilisation et dosage des produits désinfectants avec des méthodes directement applicables par agents entretien.",
+      "theme": "Agents d’entretien et bionettoyage",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ENT04",
+      "title": "Gestion et tri des déchets en milieu médical - DASRI",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Agents entretien",
+      "description": "Renforcer la maîtrise opérationnelle de gestion et tri des déchets en milieu médical - dasri avec des méthodes directement applicables par agents entretien.",
+      "theme": "Agents d’entretien et bionettoyage",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-ENT05",
+      "title": "Hygiène des mains et port des EPI",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Agents entretien",
+      "description": "Renforcer la maîtrise opérationnelle de hygiène des mains et port des epi avec des méthodes directement applicables par agents entretien.",
+      "theme": "Agents d’entretien et bionettoyage",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ENT01",
+      "title": "Discrétion, respect du patient et des espaces de soin",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents entretien",
+      "description": "Développer les comportements professionnels liés à discrétion, respect du patient et des espaces de soin afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents d’entretien et bionettoyage",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-ENT02",
+      "title": "Organisation du travail et gestion du chariot d’entretien",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents entretien",
+      "description": "Développer les comportements professionnels liés à organisation du travail et gestion du chariot d’entretien afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Agents d’entretien et bionettoyage",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-REST01",
+      "title": "Hygiène alimentaire et sécurité sanitaire en restauration médicale",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Cuisiniers, agents restauration",
+      "description": "Renforcer la maîtrise opérationnelle de hygiène alimentaire et sécurité sanitaire en restauration médicale avec des méthodes directement applicables par cuisiniers, agents restauration.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-REST02",
+      "title": "Bonnes pratiques HACCP adaptées au milieu clinique",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Cuisiniers, agents restauration",
+      "description": "Renforcer la maîtrise opérationnelle de bonnes pratiques haccp adaptées au milieu clinique avec des méthodes directement applicables par cuisiniers, agents restauration.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-REST03",
+      "title": "Préparation, conservation et remise en température des repas",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Cuisiniers",
+      "description": "Renforcer la maîtrise opérationnelle de préparation, conservation et remise en température des repas avec des méthodes directement applicables par cuisiniers.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-REST04",
+      "title": "Service restauration en chambre : protocole, discrétion et sécurité",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents service chambre",
+      "description": "Renforcer la maîtrise opérationnelle de service restauration en chambre : protocole, discrétion et sécurité avec des méthodes directement applicables par agents service chambre.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-REST05",
+      "title": "Gestion du café interne : accueil, service et encaissement",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Agents café interne",
+      "description": "Renforcer la maîtrise opérationnelle de gestion du café interne : accueil, service et encaissement avec des méthodes directement applicables par agents café interne.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-REST06",
+      "title": "Gestion des stocks, commandes et traçabilité des denrées",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Cuisiniers, agents café interne",
+      "description": "Renforcer la maîtrise opérationnelle de gestion des stocks, commandes et traçabilité des denrées avec des méthodes directement applicables par cuisiniers, agents café interne.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "HS-REST07",
+      "title": "Nettoyage, désinfection et organisation du poste de travail cuisine",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Cuisiniers, agents restauration",
+      "description": "Renforcer la maîtrise opérationnelle de nettoyage, désinfection et organisation du poste de travail cuisine avec des méthodes directement applicables par cuisiniers, agents restauration.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-REST01",
+      "title": "Accueil et hospitalité en restauration interne",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents restauration, café interne",
+      "description": "Développer les comportements professionnels liés à accueil et hospitalité en restauration interne afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-REST02",
+      "title": "Communication avec patients, accompagnants et collaborateurs",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents restauration",
+      "description": "Développer les comportements professionnels liés à communication avec patients, accompagnants et collaborateurs afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-REST03",
+      "title": "Gestion des réclamations et demandes particulières alimentaires",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Agents restauration, café interne",
+      "description": "Développer les comportements professionnels liés à gestion des réclamations et demandes particulières alimentaires afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "SS-REST04",
+      "title": "Posture professionnelle, discrétion et image de service",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Cuisiniers, agents restauration",
+      "description": "Développer les comportements professionnels liés à posture professionnelle, discrétion et image de service afin d’améliorer la qualité de service, la coopération et l’expérience patient.",
+      "theme": "Cuisiniers et agents de restauration",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-001",
+      "title": "Culture IA, IA générative et LLM en santé",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Tous services",
+      "description": "Comprendre les notions clés : IA, IA générative, grands modèles de langage, usages utiles, limites et responsabilités.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-002",
+      "title": "Bonnes pratiques de prompt et consignes efficaces",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Tous services",
+      "description": "Formuler un contexte, une tâche, un format attendu et des contraintes pour obtenir une réponse exploitable, contrôlable et non ambiguë.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-003",
+      "title": "Vérifier les réponses IA : hallucinations, biais et sources",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Médecins, qualité, managers",
+      "description": "Identifier les réponses plausibles mais fausses, contrôler les sources, repérer les biais et documenter la validation humaine.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-004",
+      "title": "Confidentialité, anonymisation et usage sécurisé des LLM",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Tous services",
+      "description": "Savoir anonymiser les données, éviter les informations patient identifiantes et distinguer les usages autorisés/non autorisés.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-005",
+      "title": "IA pour l’accueil, l’orientation et l’expérience patient",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Accueil, facturation, sécurité",
+      "description": "Créer des réponses types, reformuler les consignes et préparer des supports d’orientation sans exposer de données sensibles.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-006",
+      "title": "IA pour call center : scripts, réponses types et qualité d’appel",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Call center",
+      "description": "Structurer des scripts, enrichir les trames d’appel et préparer des réponses professionnelles adaptées aux situations récurrentes.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-007",
+      "title": "IA pour facturation, admissions et courriers administratifs",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Accueil, facturation, admin.",
+      "description": "Aider à la rédaction de modèles non confidentiels, checklists, courriers et procédures sans déléguer les décisions sensibles.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-008",
+      "title": "IA pour médecins : recherche documentaire et préparation clinique",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Médecins, biologistes",
+      "description": "Utiliser l’IA pour structurer une question, préparer une veille, vulgariser une information et garder l’analyse clinique sous contrôle humain.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-009",
+      "title": "IA pour laboratoire et imagerie : qualité, comptes rendus et veille",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Laboratoire, imagerie",
+      "description": "Utiliser l’IA pour la veille, la synthèse non nominative, la qualité et la standardisation documentaire en respectant la traçabilité.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-010",
+      "title": "IA pour infirmiers et aides-soignants : transmissions et supports",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Infirmiers, aides-soignants",
+      "description": "Créer des supports pédagogiques, fiches de rappel et trames non nominatives, sans introduire de données patient sensibles.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-011",
+      "title": "IA pour RH, formation et Académie CDL",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "RH, Académie, managers",
+      "description": "Concevoir modules, quiz, corrigés, fiches pédagogiques, passeports de formation et synthèses de compétences avec contrôle qualité.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-012",
+      "title": "IA pour qualité, audits, procédures et plans d’action",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Qualité, managers, DSI",
+      "description": "Structurer des audits, analyses d’écarts, comptes rendus, procédures et plans d’action en gardant la validation métier.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-013",
+      "title": "Gouvernance de l’IA au CDL : charte, validation et responsabilités",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Managers, DSI, qualité",
+      "description": "Définir des règles d’usage, des niveaux de risque, des outils autorisés, des rôles de validation et une traçabilité minimale.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "IA-014",
+      "title": "Éthique de l’IA et maintien du jugement professionnel",
+      "axis": "Softskills",
+      "duration": "0,5 j",
+      "audience": "Tous services",
+      "description": "Clarifier ce que l’IA peut assister, ce qu’elle ne doit pas décider, et comment préserver responsabilité, équité et confiance.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "CYB-001",
+      "title": "Cybersécurité de base et hygiène numérique quotidienne",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Tous collaborateurs",
+      "description": "Appliquer les réflexes essentiels : mots de passe robustes, verrouillage, mises à jour, prudence avec les liens et les pièces jointes.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "CYB-002",
+      "title": "Phishing, arnaques numériques et protection des messageries",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Tous collaborateurs",
+      "description": "Reconnaître les tentatives de phishing, les faux messages, les demandes urgentes suspectes et les pièces jointes à risque.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "CYB-003",
+      "title": "Protection des données de santé et secret professionnel numérique",
+      "axis": "Hardskills",
+      "duration": "1j",
+      "audience": "Tous services de soins et admin.",
+      "description": "Protéger les données médicales, limiter les partages, appliquer le besoin d’en connaître et sécuriser les supports numériques.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "CYB-004",
+      "title": "Sécurisation des postes, téléphones, comptes et accès",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Tous collaborateurs",
+      "description": "Adopter les bons usages sur ordinateur, téléphone, session personnelle, authentification et accès aux applications internes.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "CYB-005",
+      "title": "Sécurité des outils cloud, Drive, documents partagés et IA",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Admin., DSI, managers",
+      "description": "Sécuriser les partages de fichiers, gérer les droits, éviter la surexposition des documents et encadrer les outils SaaS/IA.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    },
+    {
+      "code": "CYB-006",
+      "title": "Incident numérique : conduite à tenir et signalement",
+      "axis": "Hardskills",
+      "duration": "0,5 j",
+      "audience": "Tous collaborateurs",
+      "description": "Savoir réagir en cas de suspicion de fuite, compte compromis, lien cliqué, perte de matériel ou comportement numérique anormal.",
+      "theme": "Intelligence artificielle, LLM, usages numériques et cybersécurité",
+      "source": "Catalogue CDL Academy 2026 complet"
+    }
+  ],
+  "medical": [
+    {
+      "code": "MED-01",
+      "title": "Communiquer avec empathie et renforcer la relation thérapeutique",
+      "need": "Les études médicales développent fortement les compétences scientifiques, mais préparent moins aux émotions, aux attentes implicites et aux réactions parfois difficiles des patients.",
+      "objective": "Appliquer des techniques d’écoute active et de communication empathique afin d’instaurer une relation thérapeutique fondée sur la confiance.",
+      "program": [
+        "Écoute active, questions ouvertes et reformulation",
+        "Identification et validation des émotions",
+        "Communication verbale, non verbale et posture professionnelle",
+        "Silence thérapeutique et gestion de sa propre émotion",
+        "Adaptation de la communication aux profils de patients"
+      ],
+      "methods": "Jeux de rôle, simulations de consultation, observation croisée et débriefing guidé.",
+      "duration": "3 heures",
+      "audience": "Tous les médecins",
+      "benefit": "Des consultations plus humaines, une meilleure compréhension des besoins du patient et une adhésion renforcée au parcours de soins.",
+      "theme": "Relation médecin-patient et communication",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-02",
+      "title": "Annoncer une mauvaise nouvelle au patient et à ses proches",
+      "need": "L’annonce d’un diagnostic grave, d’une complication ou d’un pronostic défavorable est une situation à forte charge émotionnelle, rarement entraînée de façon systématique pendant les études.",
+      "objective": "Conduire une annonce difficile avec clarté, empathie, progressivité et respect du rythme du patient.",
+      "program": [
+        "Préparation de l’entretien et choix du cadre",
+        "Évaluation des connaissances et attentes du patient",
+        "Annonce progressive et utilisation d’un langage accessible",
+        "Accueil des silences, émotions et réactions",
+        "Place des proches et organisation de la suite des soins"
+      ],
+      "methods": "Mises en situation, simulations observées, études de cas et débriefing collectif.",
+      "duration": "1 journée",
+      "audience": "Médecins généralistes, spécialistes, urgentistes et médecins hospitaliers",
+      "benefit": "Une annonce structurée, mieux comprise et moins traumatisante, avec une continuité d’accompagnement clairement organisée.",
+      "theme": "Relation médecin-patient et communication",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-03",
+      "title": "Expliquer simplement un diagnostic, un examen et un traitement",
+      "need": "Le jargon médical peut provoquer incompréhension, anxiété, mauvaise observance et erreurs dans la réalisation des soins ou la prise des traitements.",
+      "objective": "Transformer une information médicale complexe en explications accessibles et vérifier que le patient l’a correctement comprise.",
+      "program": [
+        "Évaluation du niveau de compréhension du patient",
+        "Réduction du jargon et hiérarchisation des messages",
+        "Explication d’un diagnostic, d’un examen ou d’une ordonnance",
+        "Présentation des bénéfices, risques et alternatives",
+        "Vérification de la compréhension par reformulation"
+      ],
+      "methods": "Exercices de simplification, simulations et analyse de documents remis aux patients.",
+      "duration": "3 heures",
+      "audience": "Tous les médecins",
+      "benefit": "Des consignes plus claires, une meilleure compréhension du parcours de soins et une diminution des erreurs liées à l’information.",
+      "theme": "Relation médecin-patient et communication",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-04",
+      "title": "Décision médicale partagée et adhésion thérapeutique",
+      "need": "Une décision exclusivement descendante peut limiter l’implication du patient, surtout lorsque plusieurs options sont possibles ou que le traitement impose des contraintes importantes.",
+      "objective": "Associer le patient aux décisions médicales en tenant compte de ses priorités, préférences et contraintes.",
+      "program": [
+        "Principes de la décision médicale partagée",
+        "Présentation équilibrée des options, bénéfices et risques",
+        "Exploration des croyances, attentes et contraintes",
+        "Gestion des hésitations et refus de traitement",
+        "Construction d’objectifs thérapeutiques réalistes"
+      ],
+      "methods": "Études de cas, simulations de consultation et exercices de négociation thérapeutique.",
+      "duration": "4 heures",
+      "audience": "Médecins généralistes, spécialistes et médecins suivant des maladies chroniques",
+      "benefit": "Un plan de soins mieux compris, plus réaliste et davantage accepté par le patient.",
+      "theme": "Relation médecin-patient et communication",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-05",
+      "title": "Gérer les patients difficiles, agressifs ou fortement anxieux",
+      "need": "L’agressivité, la contestation, l’impatience ou la peur peuvent rapidement dégrader la consultation si le médecin ne dispose pas de techniques de désamorçage.",
+      "objective": "Prévenir l’escalade relationnelle et poser des limites professionnelles tout en maintenant la sécurité de la consultation.",
+      "program": [
+        "Signes précurseurs d’une escalade",
+        "Attitudes qui apaisent ou aggravent la tension",
+        "Reformulation de la plainte et reconnaissance de l’émotion",
+        "Annonce d’un refus justifié et gestion des demandes irréalistes",
+        "Critères d’alerte et recours à un tiers ou à la sécurité"
+      ],
+      "methods": "Jeux de rôle, scénarios difficiles, débriefing et analyse de pratiques.",
+      "duration": "4 heures",
+      "audience": "Tous les médecins, notamment en consultation, urgences et hospitalisation",
+      "benefit": "Une meilleure maîtrise des situations tendues, avec préservation de la sécurité et de la dignité de chacun.",
+      "theme": "Relation médecin-patient et communication",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-06",
+      "title": "Communication interculturelle et prise en charge adaptée au patient",
+      "need": "Les différences de langue, de croyances, de représentations de la maladie et de contexte social peuvent créer des malentendus et limiter l’efficacité des soins.",
+      "objective": "Adapter la communication et le plan de soins au contexte culturel et social du patient sans jugement ni stéréotype.",
+      "program": [
+        "Influence des représentations culturelles sur la santé",
+        "Exploration des croyances et pratiques de soins",
+        "Gestion des barrières linguistiques et recours à un interprète",
+        "Place de la famille et du contexte social",
+        "Négociation d’un plan médicalement sûr et réaliste"
+      ],
+      "methods": "Études de cas, échanges d’expériences et simulations interculturelles.",
+      "duration": "4 heures",
+      "audience": "Tous les médecins",
+      "benefit": "Moins de malentendus, une relation de confiance renforcée et une meilleure adaptation du traitement à la réalité du patient.",
+      "theme": "Relation médecin-patient et communication",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-07",
+      "title": "Travailler efficacement en équipe pluriprofessionnelle",
+      "need": "Les défauts de coordination, les transmissions incomplètes et les rôles mal définis peuvent fragiliser la continuité et la sécurité des soins.",
+      "objective": "Améliorer la coopération et les transmissions entre les professionnels impliqués dans le parcours du patient.",
+      "program": [
+        "Clarification des rôles et responsabilités",
+        "Transmissions orales et écrites structurées",
+        "Briefings, débriefings et partage des informations critiques",
+        "Coordination entre services et changements d’équipe",
+        "Gestion des désaccords centrée sur la sécurité du patient"
+      ],
+      "methods": "Simulations de transmission, études de cas interprofessionnelles et exercices collectifs.",
+      "duration": "1 journée",
+      "audience": "Médecins hospitaliers, coordonnateurs et équipes pluriprofessionnelles",
+      "benefit": "Des échanges plus fiables, moins d’omissions et une continuité de prise en charge renforcée.",
+      "theme": "Travail en équipe, leadership et organisation",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-08",
+      "title": "Leadership médical et management d’une équipe de soins",
+      "need": "De nombreux médecins deviennent responsables de service ou coordonnateurs sans formation formelle en management, délégation ou accompagnement des équipes.",
+      "objective": "Développer les compétences nécessaires pour organiser, mobiliser et accompagner efficacement une équipe de soins.",
+      "program": [
+        "Styles de leadership et positionnement du responsable médical",
+        "Fixation d’objectifs et délégation",
+        "Motivation, reconnaissance et responsabilisation",
+        "Feedback constructif et gestion de la sous-performance",
+        "Conduite de réunions et accompagnement du changement"
+      ],
+      "methods": "Autodiagnostic, études de cas managériales, simulations d’entretien et ateliers.",
+      "duration": "2 jours",
+      "audience": "Chefs de service, coordonnateurs et responsables médicaux",
+      "benefit": "Un management plus clair, équitable et orienté vers la performance collective et la qualité des soins.",
+      "theme": "Travail en équipe, leadership et organisation",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-09",
+      "title": "Prévenir et gérer les conflits entre professionnels de santé",
+      "need": "Les conflits non traités peuvent dégrader le climat de travail, ralentir les décisions et affecter directement la qualité de la prise en charge.",
+      "objective": "Identifier les causes d’un conflit et conduire une résolution constructive centrée sur les faits et les besoins du service.",
+      "program": [
+        "Typologie des conflits et causes fréquentes",
+        "Distinction entre faits, interprétations et jugements",
+        "Préparation d’un entretien difficile",
+        "Expression d’un désaccord sans attaque personnelle",
+        "Recherche de solution, médiation et suivi des engagements"
+      ],
+      "methods": "Jeux de rôle, médiations simulées et analyse de situations professionnelles.",
+      "duration": "4 heures",
+      "audience": "Tous les médecins, particulièrement les responsables d’équipe",
+      "benefit": "Des tensions traitées plus tôt et une coopération professionnelle plus stable.",
+      "theme": "Travail en équipe, leadership et organisation",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-10",
+      "title": "Donner un feedback et accompagner les jeunes professionnels",
+      "need": "Les médecins encadrent internes, stagiaires et nouveaux collaborateurs sans toujours disposer d’une méthode structurée pour évaluer, corriger et faire progresser.",
+      "objective": "Formuler un feedback précis, constructif et orienté vers l’amélioration des pratiques.",
+      "program": [
+        "Caractéristiques d’un feedback utile",
+        "Observation factuelle et formulation d’un écart",
+        "Valorisation des acquis et définition d’objectifs",
+        "Conduite d’un entretien pédagogique",
+        "Supervision progressive et accompagnement d’une difficulté"
+      ],
+      "methods": "Simulations d’entretien, exercices de reformulation et études de situations d’encadrement.",
+      "duration": "4 heures",
+      "audience": "Médecins formateurs, maîtres de stage, chefs de service et encadrants",
+      "benefit": "Un accompagnement plus juste, une progression plus rapide et davantage d’autonomie chez les professionnels encadrés.",
+      "theme": "Travail en équipe, leadership et organisation",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-11",
+      "title": "Gestion du temps et structuration d’une consultation efficace",
+      "need": "Les contraintes de temps peuvent conduire à des consultations désorganisées, à des oublis et à une surcharge administrative.",
+      "objective": "Structurer la consultation et prioriser les tâches sans dégrader la qualité de la relation médicale.",
+      "program": [
+        "Préparation et ouverture de la consultation",
+        "Identification du motif principal et agenda partagé",
+        "Gestion des demandes multiples et priorisation",
+        "Maîtrise des interruptions et du temps de parole",
+        "Synthèse, plan d’action et organisation du suivi"
+      ],
+      "methods": "Analyse de consultations, simulations chronométrées et construction d’une trame personnelle.",
+      "duration": "3 heures",
+      "audience": "Médecins généralistes, spécialistes et médecins consultants",
+      "benefit": "Une consultation plus fluide, mieux cadrée et plus sécurisée malgré des contraintes de temps.",
+      "theme": "Travail en équipe, leadership et organisation",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-12",
+      "title": "Analyser et résoudre les dilemmes éthiques en pratique clinique",
+      "need": "Les choix cliniques, les souhaits du patient, les attentes de la famille et les contraintes institutionnelles peuvent entrer en contradiction.",
+      "objective": "Utiliser une méthode structurée pour analyser un dilemme éthique, prendre une décision équilibrée et en assurer la traçabilité.",
+      "program": [
+        "Identification du dilemme et des acteurs concernés",
+        "Autonomie, consentement, bienfaisance et équité",
+        "Refus de soins, vulnérabilité et désaccord familial",
+        "Proportionnalité des soins et concertation",
+        "Justification, décision et traçabilité"
+      ],
+      "methods": "Études de cas, débats éthiques et analyse collective de situations complexes.",
+      "duration": "1 journée",
+      "audience": "Tous les médecins",
+      "benefit": "Des décisions plus cohérentes, mieux argumentées et mieux partagées avec le patient, la famille et l’équipe.",
+      "theme": "Éthique, qualité et bien-être professionnel",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-13",
+      "title": "Culture de sécurité et analyse des événements indésirables",
+      "need": "Les incidents sont parfois insuffisamment déclarés ou analysés, notamment lorsque la culture professionnelle reste centrée sur la recherche d’un responsable.",
+      "objective": "Analyser les événements indésirables afin d’identifier leurs causes et de prévenir leur répétition.",
+      "program": [
+        "Événement indésirable, erreur et quasi-accident",
+        "Facteurs humains et causes organisationnelles",
+        "Déclaration et reconstitution chronologique",
+        "Analyse des causes et barrières de sécurité",
+        "Actions correctives, suivi et retour d’expérience"
+      ],
+      "methods": "Analyse de cas, arbre des causes, retour d’expérience et atelier d’amélioration.",
+      "duration": "1 journée",
+      "audience": "Médecins, responsables médicaux, coordonnateurs et équipes qualité",
+      "benefit": "Une culture d’apprentissage renforcée et des actions correctives mieux ciblées.",
+      "theme": "Éthique, qualité et bien-être professionnel",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-14",
+      "title": "Prévenir l’épuisement professionnel et préserver sa santé mentale",
+      "need": "La charge émotionnelle, les horaires prolongés, la pression décisionnelle et l’exposition à la souffrance peuvent conduire à un épuisement progressif.",
+      "objective": "Identifier les signes d’alerte et mettre en place des stratégies individuelles et collectives de prévention.",
+      "program": [
+        "Facteurs de risque et signes précoces",
+        "Fatigue compassionnelle et surcharge cognitive",
+        "Limites professionnelles et récupération",
+        "Organisation du travail et recherche de soutien",
+        "Construction d’un plan personnel de prévention"
+      ],
+      "methods": "Autoévaluation, analyse de situations, ateliers pratiques et plan d’action individuel.",
+      "duration": "4 heures",
+      "audience": "Tous les médecins, notamment jeunes médecins et professionnels fortement exposés",
+      "benefit": "Une meilleure détection des fragilités et des pratiques plus durables pour préserver la santé du médecin et la sécurité des patients.",
+      "theme": "Éthique, qualité et bien-être professionnel",
+      "axis": "Softskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-15",
+      "title": "Introduction à l’intelligence artificielle et aux grands modèles de langage en santé",
+      "need": "Les médecins rencontrent de plus en plus d’outils utilisant l’IA sans toujours comprendre leur fonctionnement, leurs capacités, leurs limites et leurs risques.",
+      "objective": "Acquérir les bases nécessaires pour comprendre et évaluer l’utilisation de l’intelligence artificielle dans le domaine de la santé.",
+      "program": [
+        "Notions clés : IA, apprentissage automatique, IA générative et LLM",
+        "Principaux usages en santé et dans l’organisation médicale",
+        "Aide à la documentation, à la recherche et à l’éducation du patient",
+        "Limites, hallucinations et biais",
+        "Place du jugement clinique et responsabilité professionnelle"
+      ],
+      "methods": "Démonstrations, études de cas et exercices de comparaison entre productions humaines et générées.",
+      "duration": "4 heures",
+      "audience": "Médecins de tous niveaux",
+      "benefit": "Une compréhension claire des possibilités de l’IA et une capacité à identifier les usages pertinents et sûrs.",
+      "theme": "Intelligence artificielle et santé numérique",
+      "axis": "Hardskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-16",
+      "title": "Utiliser les LLM comme assistants de travail médical",
+      "need": "Les outils conversationnels peuvent faire gagner du temps, mais une consigne imprécise ou une confiance excessive peuvent produire des résultats inadaptés.",
+      "objective": "Formuler des instructions efficaces et utiliser un LLM pour des tâches professionnelles à faible risque.",
+      "program": [
+        "Structure d’une instruction efficace",
+        "Définition du contexte, de la tâche et du format attendu",
+        "Création de supports pédagogiques et documents non confidentiels",
+        "Simplification d’informations destinées aux patients",
+        "Vérification systématique et limites de délégation"
+      ],
+      "methods": "Ateliers pratiques sur ordinateur, exercices guidés et analyse critique des résultats.",
+      "duration": "1 journée",
+      "audience": "Tous les médecins souhaitant intégrer l’IA générative dans leur organisation",
+      "benefit": "Un gain de temps sur les tâches compatibles avec l’IA, sans délégation de la décision clinique.",
+      "theme": "Intelligence artificielle et santé numérique",
+      "axis": "Hardskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-17",
+      "title": "Détecter les erreurs, biais et hallucinations de l’intelligence artificielle",
+      "need": "Une IA peut produire une réponse convaincante mais fausse, incomplète, biaisée ou accompagnée de références inexistantes.",
+      "objective": "Évaluer de manière critique les résultats générés par une intelligence artificielle avant toute utilisation professionnelle.",
+      "program": [
+        "Définition et formes d’hallucinations",
+        "Références inventées, omissions et erreurs de contexte",
+        "Biais des données et réponses excessivement affirmatives",
+        "Vérification de la cohérence clinique et des sources",
+        "Évaluation du risque et documentation de la validation"
+      ],
+      "methods": "Analyse de réponses générées, exercices de vérification et cas cliniques non identifiants.",
+      "duration": "4 heures",
+      "audience": "Médecins utilisateurs d’IA, responsables qualité et référents numériques",
+      "benefit": "Une capacité accrue à distinguer une réponse plausible d’une information réellement vérifiée.",
+      "theme": "Intelligence artificielle et santé numérique",
+      "axis": "Hardskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-18",
+      "title": "Intelligence artificielle, recherche documentaire et veille médicale",
+      "need": "Le volume croissant de publications scientifiques rend difficile l’identification rapide des informations pertinentes et leur analyse critique.",
+      "objective": "Utiliser les outils numériques et l’intelligence artificielle pour organiser une recherche documentaire sans remplacer l’analyse scientifique.",
+      "program": [
+        "Formulation d’une question clinique et choix des mots-clés",
+        "Recherche bibliographique et tri des résultats",
+        "Comparaison des niveaux de preuve",
+        "Utilisation d’un LLM pour structurer une stratégie ou une synthèse",
+        "Vérification dans les sources originales et organisation d’une veille"
+      ],
+      "methods": "Ateliers de recherche, comparaison de sources et production d’une synthèse critique.",
+      "duration": "1 journée",
+      "audience": "Médecins, enseignants, chercheurs, internes et responsables de formation",
+      "benefit": "Une veille plus rapide et mieux structurée, avec maintien d’une lecture critique des sources.",
+      "theme": "Intelligence artificielle et santé numérique",
+      "axis": "Hardskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-19",
+      "title": "Protection des données médicales et cybersécurité",
+      "need": "L’usage des messageries, plateformes cloud, appareils personnels et outils d’IA augmente les risques de fuite, d’accès non autorisé ou de perte d’informations médicales.",
+      "objective": "Adopter des pratiques numériques permettant de protéger les données des patients et la confidentialité médicale.",
+      "program": [
+        "Données sensibles et secret professionnel numérique",
+        "Mots de passe, authentification et sécurité des appareils",
+        "Courriels frauduleux et pièces jointes à risque",
+        "Partage sécurisé, anonymisation et outils d’IA",
+        "Conduite à tenir en cas d’incident ou de suspicion de fuite"
+      ],
+      "methods": "Cas pratiques, démonstrations, analyse de messages frauduleux et exercices de sécurisation.",
+      "duration": "4 heures",
+      "audience": "Tous les médecins et responsables médicaux",
+      "benefit": "Une réduction des risques de divulgation de données et des pratiques numériques plus responsables.",
+      "theme": "Intelligence artificielle et santé numérique",
+      "axis": "Hardskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    },
+    {
+      "code": "MED-20",
+      "title": "Télémédecine et consultation médicale à distance",
+      "need": "La consultation à distance modifie l’observation clinique, la communication, la gestion du risque et l’organisation du suivi.",
+      "objective": "Conduire une téléconsultation structurée et identifier les situations nécessitant une consultation présentielle.",
+      "program": [
+        "Préparation technique, identification et confidentialité",
+        "Cadrage de la demande et interrogatoire à distance",
+        "Observation visuelle et auto-examen guidé",
+        "Recherche des signes d’alerte et limites de la téléconsultation",
+        "Compte rendu, prescription, orientation et suivi"
+      ],
+      "methods": "Simulations de téléconsultation, scénarios cliniques et grille de décision.",
+      "duration": "4 heures",
+      "audience": "Médecins généralistes, spécialistes et médecins pratiquant la télémédecine",
+      "benefit": "Une téléconsultation mieux structurée, avec une orientation plus sûre vers une prise en charge présentielle lorsque nécessaire.",
+      "theme": "Intelligence artificielle et santé numérique",
+      "axis": "Hardskills",
+      "source": "Catalogue des formations médicales complémentaires 2026"
+    }
+  ]
+}

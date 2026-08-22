@@ -1,76 +1,52 @@
 # Walyah Académie — LMS de pilotage des formations
 
-Application web de gestion et de suivi de la formation : authentification par e-mail, espace apprenant, administration, suivi des connexions et de l’avancement, contenus vidéo ou documentaires, QCM, certificats et exports.
+Application de gestion de la formation conçue pour Walyah Académie : authentification e-mail, espaces apprenant, administrateur et super-administrateur, catalogue 2026, suivi individuel, contenus multimédias, QCM, certificats et interconnexion avec le Passeport de formation CDL.
 
-## Fonctionnalités
+## Ce qui est inclus
 
 - authentification e-mail/mot de passe avec Netlify Identity ;
-- rôles `learner` et `admin`, vérifiés côté serveur ;
-- tableau de bord apprenant et catalogue de formations ;
-- lecteur de modules, liens vidéo, ressources téléchargeables et progression ;
-- QCM interactifs avec seuil de réussite et résultats ;
-- suivi administrateur des apprenants, connexions et taux de complétion ;
-- création de formations et de QCM ;
-- import de PDF, DOCX, PPTX et MP4 dans Netlify Blobs ;
-- stockage relationnel dans Netlify Database (Postgres) ;
-- export CSV du suivi des apprenants ;
-- interface responsive aux couleurs de Walyah Académie.
+- rôles serveur `learner`, `admin` et `super_admin` ;
+- création de chaque compte apprenant sans formation, certificat, score ni progression préchargés ;
+- affectation progressive des parcours uniquement par un administrateur, un super-administrateur ou le Passeport ;
+- fiche complète de chaque apprenant accessible depuis le tableau de suivi ;
+- historique des assignations, modules, scores, certificats et connexions ;
+- 144 formations structurées issues des deux catalogues 2026 transmis ;
+- 6 parcours déjà scénarisés avec modules pédagogiques ;
+- création de formations, liens vidéo, dépôt de PDF/DOCX/PPTX/MP4 et QCM ;
+- stockage relationnel dans Netlify Database et fichiers dans Netlify Blobs ;
+- API HMAC bidirectionnelle pour le Passeport de formation ;
+- éditeur multi-question et import QCM JSON documenté dans `docs/FORMAT-QCM.md` ;
+- interface responsive, recherche, filtres, exports CSV et journal d’activité.
 
-## Mettre le projet sur GitHub
+## Déploiement
 
-Créez un dépôt GitHub vide, par exemple `walyah-academie-lms`. Décompressez l’archive, puis envoyez **tout le contenu de ce dossier** dans le dépôt. N’envoyez pas l’archive ZIP elle-même : GitHub ne la décompressera pas.
+Le guide complet se trouve dans [`docs/NETLIFY-MISE-EN-SERVICE.md`](docs/NETLIFY-MISE-EN-SERVICE.md). Le résumé :
 
-Avec l’interface GitHub :
+1. pousser tout le contenu de ce dossier à la racine d’un dépôt GitHub ;
+2. importer le dépôt dans Netlify ;
+3. utiliser `npm run build:netlify` comme commande de build ;
+4. activer Netlify Identity et Netlify Database ;
+5. définir les variables décrites dans `.env.example` ;
+6. inviter le premier compte puis lui attribuer le rôle exact `super_admin` dans **Project configuration → Identity → Users** ;
+7. se déconnecter puis se reconnecter pour renouveler le jeton et activer le rôle.
 
-1. cliquez sur **New repository** et créez le dépôt sans ajouter de README, de licence ni de `.gitignore` ;
-2. ouvrez le dépôt, puis **Add file → Upload files** ;
-3. glissez tous les fichiers et dossiers de ce projet ;
-4. cliquez sur **Commit changes**.
+Les migrations SQL placées dans `netlify/database/migrations/` sont appliquées automatiquement par Netlify au déploiement. Elles créent la structure métier, importent les 144 formations et suppriment les anciennes affectations automatiques.
 
-Avec Git en ligne de commande :
-
-```bash
-git init
-git add .
-git commit -m "Initialisation du LMS Walyah Académie"
-git branch -M main
-git remote add origin https://github.com/VOTRE-COMPTE/walyah-academie-lms.git
-git push -u origin main
-```
-
-Ne publiez jamais `node_modules`, `.next`, `.netlify` ni un fichier `.env`. Le fichier `.gitignore` les exclut déjà.
-
-## Déployer depuis GitHub sur Netlify
-
-1. Dans Netlify, choisissez **Add new project → Import an existing project**.
-2. Sélectionnez **GitHub**, autorisez l’accès, puis choisissez le dépôt.
-3. Netlify détecte Next.js. Utilisez la commande de build `npm run build` et le répertoire de publication `.next`. Ces valeurs sont déjà définies dans `netlify.toml`.
-4. Lancez **Deploy**.
-5. Dans **Project configuration → Identity**, activez Netlify Identity.
-6. Lors du déploiement, Netlify provisionne automatiquement la base et applique la migration de `netlify/database/migrations/`. Si la base n’apparaît pas, ouvrez la page **Database** du projet et choisissez **Create a database manually**, puis redéployez.
-7. Dans **Project configuration → Environment variables**, ajoutez `NEXT_PUBLIC_SITE_URL` avec l’URL HTTPS Netlify finale ou votre domaine personnalisé, puis relancez le déploiement.
-8. Dans **Identity → Users**, attribuez le rôle `admin` aux comptes administrateurs. Les nouveaux comptes reçoivent le rôle `learner`.
-
-Le mode de démonstration reste accessible hors Netlify avec les boutons **Espace apprenant** et **Espace admin**.
-
-## Développement local
-
-```bash
-npm install
-npm run dev
-```
-
-Ouvrez ensuite `http://localhost:3000`.
-
-Commandes disponibles :
+## Commandes
 
 - `npm run dev` : serveur de développement ;
-- `npm run build` : build de production ;
-- `npm run start` : exécution du build ;
-- `npm run lint` : contrôle statique.
+- `npm run build:netlify` : build Next.js destiné à Netlify ;
+- `npm run build` : build de la version Sites/Vinext ;
+- `npm run lint` : contrôle ESLint ;
+- `npm test` : build et vérification du HTML rendu ;
+- `npm run catalog:migration` : régénération de la migration à partir de `app/catalogues.json`.
 
-## Données et sécurité
+## Architecture des données
 
-La migration initialise les tables `users`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts` et `login_events`. Les fichiers sont stockés dans Netlify Blobs ; leurs métadonnées sont enregistrées dans la base.
+Les principales tables sont `users`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates`, `login_events`, `activity_events`, `training_requests`, `passport_connections`, `integration_events` et `role_audit_events`.
 
-Les fonctions Netlify vérifient la session et le rôle côté serveur. Les écritures contrôlent l’origine de la requête. Les imports sont limités à 50 Mo et à une liste de formats autorisés. Avant une mise en production publique, complétez les mentions légales, la politique de confidentialité, les durées de conservation et les règles d’attribution du rôle administrateur.
+Les fichiers pédagogiques sont conservés dans le store Netlify Blobs `walyah-lms-content`; la base conserve uniquement les métadonnées et les liens métier.
+
+## Passeport de formation
+
+Le contrat d’échange, les événements et la signature HMAC sont décrits dans [`docs/PASSEPORT-INTEGRATION.md`](docs/PASSEPORT-INTEGRATION.md). La clé de rapprochement prioritaire est le `matricule`, avec l’e-mail comme solution de secours.

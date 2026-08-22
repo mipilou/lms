@@ -1,9 +1,5 @@
 [build]
-  command = "npm run build"
-  publish = ".next"
-
-[build.environment]
-  NODE_VERSION = "22.13.0"
+  command = "npm run build:netlify"
 
 [functions]
   directory = "netlify/functions"

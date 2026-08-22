@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ??
-  process.env.URL ??
-  "http://localhost:3000").replace(/\/$/, "");
+function normalizeSiteUrl(value: string | undefined) {
+  const fallback = "https://cdl-pilotage-formation.espace-de-tr-6659.chatgpt.site";
+  if (!value) return fallback;
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString().replace(/\/$/, "") : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const siteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

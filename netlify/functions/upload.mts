@@ -12,12 +12,38 @@ const allowedTypes = new Set([
 ]);
 
 const handler = async (request: Request) => {
-  if (request.method !== "POST") return Response.json({ error: "Méthode non autorisée" }, { status: 405 });
-  verifyRequestOrigin(request);
   const identityUser = await getUser();
   if (!identityUser) return Response.json({ error: "Authentification requise" }, { status: 401 });
-  const user = identityUser as unknown as { id: string; roles: string[] };
-  if (!user.roles.includes("admin")) return Response.json({ error: "Accès administrateur requis" }, { status: 403 });
+  const user = identityUser as unknown as { id: string; roles?: string[] };
+  const roles = user.roles ?? [];
+  const isStaff = roles.includes("admin") || roles.includes("super_admin");
+
+  if (request.method === "GET") {
+    const resourceId = new URL(request.url).searchParams.get("resourceId") ?? "";
+    if (!resourceId) return Response.json({ error: "resourceId requis" }, { status: 400 });
+    const db = getDatabase();
+    const resources = isStaff ? await db.sql`
+      SELECT id, storage_key, name, mime_type FROM resources WHERE id = ${resourceId} AND resource_type = 'file' LIMIT 1
+    ` : await db.sql`
+      SELECT r.id, r.storage_key, r.name, r.mime_type
+      FROM resources r
+      JOIN modules m ON m.id = r.module_id
+      JOIN enrollments e ON e.course_id = m.course_id AND e.user_id = ${user.id}
+      WHERE r.id = ${resourceId} AND r.resource_type = 'file'
+      LIMIT 1
+    `;
+    const resource = resources[0];
+    if (!resource?.storage_key) return Response.json({ error: "Ressource introuvable" }, { status: 404 });
+    const store = getStore("walyah-lms-content");
+    const stream = await store.get(String(resource.storage_key), { type: "stream" });
+    if (!stream) return Response.json({ error: "Fichier introuvable" }, { status: 404 });
+    const safeName = String(resource.name ?? "ressource").replace(/[\r\n"]/g, "-");
+    return new Response(stream, { headers: { "Content-Type": String(resource.mime_type ?? "application/octet-stream"), "Content-Disposition": `attachment; filename="${safeName}"`, "Cache-Control": "private, no-store" } });
+  }
+
+  if (request.method !== "POST") return Response.json({ error: "Méthode non autorisée" }, { status: 405 });
+  verifyRequestOrigin(request);
+  if (!isStaff) return Response.json({ error: "Accès administrateur requis" }, { status: 403 });
 
   const form = await request.formData();
   const file = form.get("file");
