@@ -15,7 +15,7 @@ Application de gestion de la formation conçue pour Walyah Académie : authentif
 - tableaux de bord distincts pour l’administration opérationnelle et la super-administration, avec sélecteur de prévisualisation super-admin/admin/apprenant ;
 - cockpit d’insights dynamique sur 7, 30 ou 90 jours : engagement, affectations, certifications et comparaison des services ;
 - journal intelligent des connexions et activités, classé par période et catégorie, filtrable, exportable et navigable par clic ;
-- 144 formations structurées issues des deux catalogues 2026 transmis, affichées par catégories ;
+- 144 formations structurées issues des deux catalogues 2026 transmis, classées dans 13 domaines thématiques (IT, IA, cybersécurité, soins, hygiène, management, administration, etc.) ;
 - 6 parcours déjà scénarisés avec modules pédagogiques ;
 - studio guidé de préparation depuis le catalogue, modules réordonnables, liens vidéo/audio/web et dépôt segmenté compatible Netlify de PDF/DOCX/PPTX/MP4/WebM/audio/SCORM ;
 - stockage relationnel dans Netlify Database et fichiers dans Netlify Blobs ;

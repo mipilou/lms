@@ -28,6 +28,54 @@ export type CatalogCourse = {
   program?: string[]; methods?: string; benefit?: string;
 };
 
+export type TrainingTheme = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+export const trainingThemes: TrainingTheme[] = [
+  { id: "it", label: "Informatique, IT & outils numériques", description: "Systèmes d’information, logiciels métiers, bureautique, réseau et support." },
+  { id: "ai", label: "Intelligence artificielle & innovation", description: "IA générative, LLM, usages professionnels et santé numérique." },
+  { id: "cyber", label: "Cybersécurité & protection des données", description: "Sécurité des accès, confidentialité, phishing et données de santé." },
+  { id: "patient", label: "Accueil, communication & relation patient", description: "Expérience patient, écoute, téléphone, annonce et gestion des situations difficiles." },
+  { id: "clinical", label: "Soins & pratiques cliniques", description: "Gestes de soins, prélèvements, médicaments, surveillance et protocoles médicaux." },
+  { id: "laboratory", label: "Laboratoire & biologie médicale", description: "Analyses, échantillons, automates, bactériologie et qualité biologique." },
+  { id: "hygiene", label: "Hygiène, prévention & bionettoyage", description: "Hygiène des mains, EPI, DASRI, désinfection et prévention des infections." },
+  { id: "management", label: "Management, leadership & organisation", description: "Leadership, coopération, gestion de projet, priorités et feedback." },
+  { id: "administration", label: "Administration, RH, finance & gestion", description: "Secrétariat, facturation, caisse, ressources humaines et gestion budgétaire." },
+  { id: "safety", label: "Sécurité, urgences & transport", description: "Contrôle d’accès, secours, évacuation, incidents et transport des patients." },
+  { id: "hospitality", label: "Restauration & services hôteliers", description: "HACCP, restauration médicale, hospitalité, stocks et service en chambre." },
+  { id: "quality", label: "Qualité, éthique & bien-être", description: "Éthique, droits du patient, culture qualité, sécurité et santé au travail." },
+  { id: "softskills", label: "Développement personnel & soft skills", description: "Émotions, stress, posture professionnelle, ponctualité et savoir-être." },
+];
+
+const themeById = new Map(trainingThemes.map((theme) => [theme.id, theme]));
+const itCodes = new Set(["HS-IT01", "HS-IT03", "HS-IT04", "HS-IT05", "SS-IT01", "SS-IT02", "HS-MD04", "HS-MD05", "HS-LAB07", "HS-ACC01", "HS-ACC04", "HS-CC02", "HS-ADM02", "MED-20"]);
+const relationCodes = new Set(["SS-T01", "SS-T02", "SS-T08", "HS-MD01", "SS-MD02", "SS-INF01", "SS-INF02", "SS-AS01", "SS-AS02", "SS-LAB01", "SS-BR01", "SS-SEC01", "SS-SEC02", "SS-ACC01", "SS-ACC02", "SS-ACC03", "SS-CC01", "SS-CC02", "SS-CC03", "SS-CC04"]);
+const hygieneCodes = new Set(["SS-T10", "HS-INF05", "HS-AS01", "HS-AS05", "HS-BR04"]);
+const managementCodes = new Set(["SS-T04", "SS-MD01", "HS-ADM05", "SS-ADM03", "SS-BR02", "MED-07", "MED-08", "MED-09", "MED-10", "MED-11"]);
+const administrationCodes = new Set(["HS-ACC02", "HS-ACC03", "HS-ACC05", "HS-CC01", "HS-ADM01", "HS-ADM03", "HS-ADM04", "SS-ADM01", "SS-ADM02"]);
+const qualityCodes = new Set(["SS-T05", "SS-MD03", "SS-LAB02", "MED-12", "MED-13", "MED-14"]);
+
+export function trainingThemeFor(course: Pick<CatalogCourse, "code" | "title">): TrainingTheme {
+  const code = course.code.toUpperCase();
+  let themeId = "softskills";
+  if (code.startsWith("IA-") || ["MED-15", "MED-16", "MED-17", "MED-18"].includes(code)) themeId = "ai";
+  else if (code.startsWith("CYB-") || code === "HS-IT02" || code === "MED-19" || code === "SS-ACC04") themeId = "cyber";
+  else if (itCodes.has(code)) themeId = "it";
+  else if (code.startsWith("HS-REST") || code.startsWith("SS-REST")) themeId = "hospitality";
+  else if (hygieneCodes.has(code) || code.startsWith("HS-ENT") || code.startsWith("SS-ENT")) themeId = "hygiene";
+  else if (relationCodes.has(code) || /^MED-0[1-6]$/.test(code)) themeId = "patient";
+  else if (managementCodes.has(code)) themeId = "management";
+  else if (administrationCodes.has(code)) themeId = "administration";
+  else if (qualityCodes.has(code)) themeId = "quality";
+  else if (code.startsWith("HS-LAB") || code.startsWith("SS-LAB")) themeId = "laboratory";
+  else if (code.startsWith("HS-SEC") || code.startsWith("SS-SEC") || code.startsWith("HS-BR") || code === "HS-CC03") themeId = "safety";
+  else if (code.startsWith("HS-INF") || code.startsWith("SS-INF") || code.startsWith("HS-AS") || code.startsWith("SS-AS") || code.startsWith("HS-MD")) themeId = "clinical";
+  return themeById.get(themeId) ?? trainingThemes[trainingThemes.length - 1];
+}
+
 export type TrainingRecord = {
   courseId: string; code: string; title: string; status: CourseStatus | "En retard";
   progress: number; completedModules: number; modules: number; score?: number;

@@ -554,6 +554,7 @@ const handler = async (request: Request) => {
 
   if (action === "prepare-catalog-course") {
     const courseId = String(body.courseId ?? "");
+    const category = String(body.category ?? "").trim();
     if (!courseId) return json({ error: "courseId requis" }, 400);
     const existing = await db.sql<{ id: string; title: string; description: string; lifecycle_status: string }>`
       SELECT id, title, description, lifecycle_status FROM courses WHERE id = ${courseId} LIMIT 1
@@ -563,6 +564,7 @@ const handler = async (request: Request) => {
     await db.sql`
       UPDATE courses SET lifecycle_status = CASE WHEN lifecycle_status = 'catalog' THEN 'draft' ELSE lifecycle_status END,
         published = CASE WHEN lifecycle_status = 'catalog' THEN FALSE ELSE published END,
+        category = CASE WHEN ${category} <> '' THEN ${category} ELSE category END,
         created_by = COALESCE(created_by, ${user.id}), updated_at = NOW()
       WHERE id = ${courseId}
     `;

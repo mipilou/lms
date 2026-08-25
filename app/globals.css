@@ -835,6 +835,21 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .catalogue-category-index button.active { border-color: #d4aeb4; background: #fff9fa; box-shadow: 0 7px 18px rgba(80,35,43,.06); }
 .catalogue-category-index button.active > span { background: var(--teal); color: white; }
 .catalogue-category-index button.active strong { color: var(--teal-dark); }
+.thematic-index button { min-width: 255px; grid-template-rows: auto auto auto; }
+.thematic-index button > span { grid-row: 1 / 4; }
+.thematic-index button em { grid-column: 2; display: -webkit-box; overflow: hidden; margin-top: 3px; color: #99a3a8; font-size: 7px; font-style: normal; line-height: 1.35; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.thematic-index button.theme-ai > span { background: #f0ebfa; color: #7654ae; }
+.thematic-index button.theme-cyber > span { background: #e9f0fa; color: #3f68a7; }
+.thematic-index button.theme-patient > span { background: #e8f5f1; color: #2b806c; }
+.thematic-index button.theme-clinical > span { background: #e9f3fa; color: #39769a; }
+.thematic-index button.theme-hygiene > span { background: #eaf7ee; color: #32805d; }
+.thematic-index button.theme-management > span { background: #fff1df; color: #aa6a22; }
+.thematic-index button.theme-administration > span { background: #edf1f5; color: #5e7183; }
+.thematic-index button.theme-safety > span { background: #fff0ed; color: #b65b45; }
+.thematic-index button.theme-hospitality > span { background: #fff4df; color: #a97827; }
+.thematic-index button.theme-quality > span { background: #f7eaee; color: #a44155; }
+.thematic-index button.theme-softskills > span { background: #f3edfa; color: #76549d; }
+.thematic-index button.active > span { background: var(--teal); color: white; }
 .catalogue-category-section, .learner-course-category, .admin-course-category { display: grid; gap: 11px; margin: 18px 0 25px; }
 .catalogue-category-section > header, .admin-course-category > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 9px; border-bottom: 1px solid #e1e6e7; }
 .catalogue-category-section > header > div, .admin-course-category > header > div { display: flex; align-items: center; gap: 10px; }
@@ -842,6 +857,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .catalogue-category-section header small, .admin-course-category header small { display: block; color: #929da3; font-size: 7px; text-transform: uppercase; letter-spacing: .1em; }
 .catalogue-category-section header h2, .admin-course-category header h2 { margin: 3px 0 0; color: var(--navy); font-size: 16px; }
 .catalogue-category-section > header > strong, .admin-course-category > header > strong { color: #7f8c93; font-size: 8px; }
+.catalogue-category-section header p { max-width: 680px; margin: 4px 0 0; color: #829097; font-size: 8px; line-height: 1.45; }
+.category-section-actions { align-items: flex-end !important; flex-direction: column; flex: 0 0 auto; }
+.category-section-actions strong { color: #7f8c93; font-size: 8px; }
+.category-section-actions button { padding: 0; white-space: nowrap; }
 .learner-category-list, .admin-course-categories { display: grid; }
 .learner-course-category .section-heading { margin-bottom: 0; }
 .admin-course-category { margin-top: 0; padding: 15px; border: 1px solid #e1e7e8; border-radius: 14px; background: #fafbfb; }
@@ -1051,6 +1070,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .insight-callouts { grid-template-columns: 1fr; }
   .bi-stacked-bar-legend { align-items: flex-start; flex-direction: column; }
   .catalogue-category-index { grid-auto-columns: minmax(210px, 82vw); grid-template-columns: none; overflow-x: auto; padding-bottom: 5px; }
+  .thematic-index button { min-width: min(280px, 82vw); }
+  .catalogue-category-section > header { align-items: flex-start; flex-direction: column; }
+  .category-section-actions { align-items: flex-start !important; }
   .admin-course-category, .learner-course-category, .catalogue-category-group { padding: 14px 12px; }
   .category-group-heading { align-items: flex-start; flex-direction: column; }
   .admin-course-row { grid-template-columns: minmax(0, 1fr) auto; }

@@ -11,7 +11,7 @@ import {
   UploadCloud, UserCog, UserPlus, UserRound, UsersRound, Video, X,
 } from "lucide-react";
 import {
-  catalogueTotals, courses, readyCourseByCode, trainingCatalogue,
+  catalogueTotals, courses, readyCourseByCode, trainingCatalogue, trainingThemeFor, trainingThemes,
   type CatalogCourse, type Course, type Learner,
 } from "./data";
 import { emptyQuizQuestion, importQuizFile, type DraftQuizQuestion, type QuizQuestionType } from "./quiz-import";
@@ -159,7 +159,7 @@ function catalogCourseDraft(item: CatalogCourse): Course {
     id: `catalog-${normalizedCode}`,
     code: item.code,
     title: item.title,
-    category: item.axis,
+    category: trainingThemeFor(item).label,
     description: item.description ?? item.objective ?? item.theme,
     objective: item.objective ?? item.description ?? item.theme,
     audience: item.audience,
@@ -310,7 +310,11 @@ function parseModulePayload(value: unknown): Array<Record<string, unknown>> {
 
 function courseFromRow(row: Record<string, unknown>): Course {
   const id = String(row.id ?? `course-${String(row.code ?? "unknown")}`);
-  const template = courses.find((item) => item.id === id || item.code === String(row.code ?? ""));
+  const code = String(row.code ?? "");
+  const template = courses.find((item) => item.id === id || item.code === code);
+  const catalogueTemplate = trainingCatalogue.find((item) => item.code === code);
+  const storedCategory = String(row.category ?? template?.category ?? "Formation");
+  const category = catalogueTemplate && ["Softskills", "Hardskills"].includes(storedCategory) ? trainingThemeFor(catalogueTemplate).label : storedCategory;
   const payload = parseModulePayload(row.module_content);
   const moduleContent = payload.length ? payload.map((module, index) => {
     const objectives = Array.isArray(module.learning_objectives) ? module.learning_objectives.map(String) : [];
@@ -335,7 +339,7 @@ function courseFromRow(row: Record<string, unknown>): Course {
     id,
     code: String(row.code ?? template?.code ?? "WA"),
     title: String(row.title ?? template?.title ?? "Formation"),
-    category: String(row.category ?? template?.category ?? "Formation"),
+    category,
     description: String(row.description ?? template?.description ?? ""),
     objective: String(row.objective ?? template?.objective ?? ""),
     audience: String(row.audience ?? template?.audience ?? ""),
@@ -711,42 +715,60 @@ function CatalogueView({ assignedCourses, loading, onCourse }: { assignedCourses
   </>;
 }
 
+function themeIcon(themeId: string) {
+  if (themeId === "ai") return <Sparkles size={18} />;
+  if (themeId === "cyber" || themeId === "quality") return <ShieldCheck size={18} />;
+  if (themeId === "patient") return <UsersRound size={18} />;
+  if (themeId === "clinical") return <ClipboardCheck size={18} />;
+  if (themeId === "management") return <UserCog size={18} />;
+  if (themeId === "administration") return <Table2 size={18} />;
+  if (themeId === "safety") return <CircleHelp size={18} />;
+  if (themeId === "hospitality") return <Award size={18} />;
+  if (themeId === "softskills") return <TrendingUp size={18} />;
+  return themeId === "it" ? <Settings size={18} /> : <BookOpen size={18} />;
+}
+
 function FullCatalogueView({ onCourse }: { onCourse: (course: Course) => void }) {
   const [query, setQuery] = useState("");
-  const [axis, setAxis] = useState("Tous les axes");
+  const [themeId, setThemeId] = useState("all");
   const [source, setSource] = useState("Tous les catalogues");
   const [limit, setLimit] = useState(24);
   const [selected, setSelected] = useState<CatalogCourse | null>(null);
   const [preparing, setPreparing] = useState<{ course: Course; catalog: CatalogCourse } | null>(null);
   const [catalogStates, setCatalogStates] = useState<Record<string, { id: string; lifecycle: string }>>({});
-  const axes = ["Tous les axes", ...Array.from(new Set(trainingCatalogue.map((item) => item.axis))).sort()];
   const sources = ["Tous les catalogues", ...Array.from(new Set(trainingCatalogue.map((item) => item.source)))];
+  const themeOrder = new Map(trainingThemes.map((theme, index) => [theme.id, index]));
   const filtered = trainingCatalogue.filter((item) => {
-    const haystack = `${item.code} ${item.title} ${item.theme} ${item.audience} ${item.description ?? ""} ${item.objective ?? ""}`.toLowerCase();
-    return (axis === "Tous les axes" || item.axis === axis) && (source === "Tous les catalogues" || item.source === source) && haystack.includes(query.toLowerCase());
-  });
-  const categoryCounts = Array.from(new Set(trainingCatalogue.map((item) => item.axis))).sort().map((item) => ({ name: item, count: trainingCatalogue.filter((course) => course.axis === item).length }));
-  const visibleCatalogue = filtered.slice(0, limit);
-  const groupedCatalogue = Array.from(new Set(visibleCatalogue.map((item) => item.axis))).sort().map((categoryName) => ({ categoryName, items: visibleCatalogue.filter((item) => item.axis === categoryName) }));
+    const theme = trainingThemeFor(item);
+    const haystack = `${item.code} ${item.title} ${theme.label} ${theme.description} ${item.theme} ${item.audience} ${item.description ?? ""} ${item.objective ?? ""}`.toLowerCase();
+    return (themeId === "all" || theme.id === themeId) && (source === "Tous les catalogues" || item.source === source) && haystack.includes(query.trim().toLowerCase());
+  }).sort((left, right) => (themeOrder.get(trainingThemeFor(left).id) ?? 99) - (themeOrder.get(trainingThemeFor(right).id) ?? 99) || left.title.localeCompare(right.title, "fr"));
+  const themeCounts = trainingThemes.map((theme) => ({ ...theme, count: trainingCatalogue.filter((course) => trainingThemeFor(course).id === theme.id).length })).filter((theme) => theme.count > 0);
+  const overviewMode = themeId === "all" && !query.trim() && source === "Tous les catalogues";
+  const visibleCodes = new Set(filtered.slice(0, limit).map((item) => item.code));
+  const groupedCatalogue = trainingThemes.map((theme) => {
+    const matches = filtered.filter((item) => trainingThemeFor(item).id === theme.id);
+    return { ...theme, total: matches.length, items: overviewMode ? matches.slice(0, 4) : matches.filter((item) => visibleCodes.has(item.code)) };
+  }).filter((theme) => theme.items.length > 0);
+
   useEffect(() => {
     if (!usesNetlifyIdentity()) return;
     void fetch("/.netlify/functions/lms-data?scope=catalog").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { courses?: Array<Record<string, unknown>> }) => {
       setCatalogStates(Object.fromEntries((data.courses ?? []).map((item) => [String(item.code), { id: String(item.id), lifecycle: String(item.lifecycle_status ?? "catalog") }])));
     }).catch(() => undefined);
   }, []);
+
   return <>
-    <section className="page-heading catalogue-heading"><div><span className="eyebrow">Offre Walyah Académie 2026</span><h1>Catalogues de formations</h1><p>{catalogueTotals.complete} formations métiers, soft skills, IA et cybersécurité, complétées par {catalogueTotals.medical} formations médicales détaillées.</p></div><div className="catalogue-downloads"><span className="count-badge"><BookOpen size={15} /> {catalogueTotals.all} formations intégrées</span><a className="secondary-button" href="/catalogues/catalogue-walyah-academie-2026-complet.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue complet</a><a className="secondary-button" href="/catalogues/catalogue-formations-medicales-2026.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue médical</a></div></section>
-    <section className="catalogue-insights"><article><strong>{catalogueTotals.all}</strong><span>formations indexées</span></article><article><strong>2</strong><span>catalogues 2026</span></article><article><strong>{courses.length}</strong><span>parcours déjà scénarisés</span></article><article><strong>1 clic</strong><span>pour ouvrir une fiche</span></article></section>
-    <section className="catalogue-category-index" aria-label="Catégories de formation"><button className={axis === "Tous les axes" ? "active" : ""} onClick={() => { setAxis("Tous les axes"); setLimit(24); }}><span><LibraryBig size={18} /></span><strong>Toutes les catégories</strong><small>{trainingCatalogue.length} formations</small></button>{categoryCounts.map((item) => <button key={item.name} className={axis === item.name ? "active" : ""} onClick={() => { setAxis(item.name); setLimit(24); }}><span><BookOpen size={18} /></span><strong>{item.name}</strong><small>{item.count} formation{item.count > 1 ? "s" : ""}</small></button>)}</section>
-    <section className="catalogue-toolbar admin-catalogue-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => { setQuery(event.target.value); setLimit(24); }} placeholder="Code, titre, thème, public…" /></label><select value={axis} onChange={(event) => { setAxis(event.target.value); setLimit(24); }}>{axes.map((item) => <option key={item}>{item}</option>)}</select><select value={source} onChange={(event) => { setSource(event.target.value); setLimit(24); }}>{sources.map((item) => <option key={item}>{item}</option>)}</select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></section>
-    {filtered.length ? <>{groupedCatalogue.map((group) => <section className="catalogue-category-section" key={group.categoryName}><header><div><span className="category-emblem"><BookOpen size={19} /></span><span><small>Catégorie</small><h2>{group.categoryName}</h2></span></div><strong>{group.items.length} affichée{group.items.length > 1 ? "s" : ""}</strong></header><div className="master-catalogue-grid">{group.items.map((item) => { const ready = readyCourseByCode.get(item.code); const lifecycle = catalogStates[item.code]?.lifecycle; return <button className="catalogue-entry" key={item.code} onClick={() => setSelected(item)}><div><span className="course-code">{item.code}</span>{ready || lifecycle === "published" ? <span className="status-tag status-actif">Prêt dans le LMS</span> : lifecycle === "draft" ? <span className="status-tag status-relancer">En préparation</span> : <span className="status-tag status-draft">Catalogue</span>}</div><h2>{item.title}</h2><p>{item.objective ?? item.description}</p><footer><span><Clock3 size={14} /> {item.duration}</span><span>{item.axis}</span><ChevronRight size={17} /></footer></button>; })}</div></section>)}{limit < filtered.length && <div className="load-more"><button className="secondary-button" onClick={() => setLimit(Math.min(limit + 24, filtered.length))}>Afficher 24 formations de plus</button></div>}</> : <section className="empty-state compact-empty"><Search size={28} /><h2>Aucune formation trouvée</h2><p>Modifiez les filtres ou essayez un terme plus général.</p></section>}
-    {selected && <Modal title={`${selected.code} · ${selected.title}`} onClose={() => setSelected(null)} wide><div className="catalogue-detail"><div className="catalogue-detail-meta"><span>{selected.axis}</span><span><Clock3 size={14} /> {selected.duration}</span><span><UsersRound size={14} /> {selected.audience}</span></div>{selected.need && <section><span className="form-section-title">Besoin professionnel</span><p>{selected.need}</p></section>}<section><span className="form-section-title">Objectif</span><p>{selected.objective ?? selected.description}</p></section>{selected.program?.length ? <section><span className="form-section-title">Programme proposé</span><ol>{selected.program.map((item) => <li key={item}>{item}</li>)}</ol></section> : <section><span className="form-section-title">Thème du catalogue</span><p>{selected.theme}</p></section>}{selected.methods && <section><span className="form-section-title">Méthodes pédagogiques</span><p>{selected.methods}</p></section>}{selected.benefit && <section><span className="form-section-title">Bénéfice attendu</span><p>{selected.benefit}</p></section>}<footer><div><small>Source</small><strong>{selected.source}</strong></div>{readyCourseByCode.has(selected.code) ? <button className="primary-button" onClick={() => { const ready = readyCourseByCode.get(selected.code); if (ready) onCourse(ready); }}><Play size={16} /> Ouvrir le parcours</button> : <button className="primary-button" onClick={() => { const draft = catalogCourseDraft(selected); const remote = catalogStates[selected.code]; if (remote?.id) draft.id = remote.id; setCatalogStates((current) => ({ ...current, [selected.code]: { id: draft.id, lifecycle: "draft" } })); setPreparing({ course: draft, catalog: selected }); setSelected(null); }}><Plus size={16} /> {catalogStates[selected.code]?.lifecycle === "draft" ? "Continuer la préparation" : "Préparer ce parcours"}</button>}</footer></div></Modal>}
-    {preparing && <ManageContentModal
-      course={preparing.course}
-      catalogSeed={preparing.catalog}
-      onClose={() => setPreparing(null)}
-      onPublished={() => setCatalogStates((current) => ({ ...current, [preparing.catalog.code]: { id: preparing.course.id, lifecycle: "published" } }))}
-    />}
+    <section className="page-heading catalogue-heading"><div><span className="eyebrow">Offre Walyah Académie 2026</span><h1>Catalogues par thématique</h1><p>Les formations sont regroupées par grands domaines pour retrouver rapidement un parcours IT, santé, management, hygiène, IA ou cybersécurité.</p></div><div className="catalogue-downloads"><span className="count-badge"><BookOpen size={15} /> {catalogueTotals.all} formations intégrées</span><a className="secondary-button" href="/catalogues/catalogue-walyah-academie-2026-complet.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue complet</a><a className="secondary-button" href="/catalogues/catalogue-formations-medicales-2026.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue médical</a></div></section>
+    <section className="catalogue-insights"><article><strong>{catalogueTotals.all}</strong><span>formations indexées</span></article><article><strong>{themeCounts.length}</strong><span>domaines thématiques</span></article><article><strong>2</strong><span>catalogues 2026</span></article><article><strong>{courses.length}</strong><span>parcours scénarisés</span></article></section>
+    <section className="catalogue-category-index thematic-index" aria-label="Thématiques de formation">
+      <button className={themeId === "all" ? "active" : ""} onClick={() => { setThemeId("all"); setLimit(24); }}><span><LibraryBig size={18} /></span><strong>Toutes les thématiques</strong><small>{trainingCatalogue.length} formations</small><em>Vue d’ensemble des domaines</em></button>
+      {themeCounts.map((theme) => <button key={theme.id} className={`${themeId === theme.id ? "active" : ""} theme-${theme.id}`} onClick={() => { setThemeId(theme.id); setLimit(24); }}><span>{themeIcon(theme.id)}</span><strong>{theme.label}</strong><small>{theme.count} formation{theme.count > 1 ? "s" : ""}</small><em>{theme.description}</em></button>)}
+    </section>
+    <section className="catalogue-toolbar admin-catalogue-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => { setQuery(event.target.value); setLimit(24); }} placeholder="Rechercher : IT, soins, Excel, management…" /></label><select aria-label="Filtrer par thématique" value={themeId} onChange={(event) => { setThemeId(event.target.value); setLimit(24); }}><option value="all">Toutes les thématiques</option>{themeCounts.map((theme) => <option value={theme.id} key={theme.id}>{theme.label}</option>)}</select><select aria-label="Filtrer par catalogue" value={source} onChange={(event) => { setSource(event.target.value); setLimit(24); }}>{sources.map((item) => <option key={item}>{item}</option>)}</select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></section>
+    {filtered.length ? <>{groupedCatalogue.map((group) => <section className={`catalogue-category-section theme-section theme-${group.id}`} key={group.id}><header><div><span className="category-emblem">{themeIcon(group.id)}</span><span><small>Thématique de formation</small><h2>{group.label}</h2><p>{group.description}</p></span></div><div className="category-section-actions"><strong>{overviewMode ? `${group.items.length} sur ${group.total}` : `${group.total} formation${group.total > 1 ? "s" : ""}`}</strong>{overviewMode && group.total > group.items.length && <button className="text-button strong" onClick={() => { setThemeId(group.id); setLimit(24); }}>Voir toute la thématique <ChevronRight size={14} /></button>}</div></header><div className="master-catalogue-grid">{group.items.map((item) => { const ready = readyCourseByCode.get(item.code); const lifecycle = catalogStates[item.code]?.lifecycle; return <button className="catalogue-entry" key={item.code} onClick={() => setSelected(item)}><div><span className="course-code">{item.code}</span>{ready || lifecycle === "published" ? <span className="status-tag status-actif">Prêt dans le LMS</span> : lifecycle === "draft" ? <span className="status-tag status-relancer">En préparation</span> : <span className="status-tag status-draft">Catalogue</span>}</div><h2>{item.title}</h2><p>{item.objective ?? item.description}</p><footer><span><Clock3 size={14} /> {item.duration}</span><span>{trainingThemeFor(item).label}</span><ChevronRight size={17} /></footer></button>; })}</div></section>)}{!overviewMode && limit < filtered.length && <div className="load-more"><button className="secondary-button" onClick={() => setLimit(Math.min(limit + 24, filtered.length))}>Afficher 24 formations de plus</button></div>}</> : <section className="empty-state compact-empty"><Search size={28} /><h2>Aucune formation trouvée</h2><p>Modifiez la thématique, le catalogue ou essayez un terme plus général.</p></section>}
+    {selected && <Modal title={`${selected.code} · ${selected.title}`} onClose={() => setSelected(null)} wide><div className="catalogue-detail"><div className="catalogue-detail-meta"><span>{trainingThemeFor(selected).label}</span><span><Clock3 size={14} /> {selected.duration}</span><span><UsersRound size={14} /> {selected.audience}</span></div>{selected.need && <section><span className="form-section-title">Besoin professionnel</span><p>{selected.need}</p></section>}<section><span className="form-section-title">Objectif</span><p>{selected.objective ?? selected.description}</p></section>{selected.program?.length ? <section><span className="form-section-title">Programme proposé</span><ol>{selected.program.map((item) => <li key={item}>{item}</li>)}</ol></section> : <section><span className="form-section-title">Public ou métier d’origine</span><p>{selected.theme}</p></section>}{selected.methods && <section><span className="form-section-title">Méthodes pédagogiques</span><p>{selected.methods}</p></section>}{selected.benefit && <section><span className="form-section-title">Bénéfice attendu</span><p>{selected.benefit}</p></section>}<footer><div><small>Source</small><strong>{selected.source}</strong></div>{readyCourseByCode.has(selected.code) ? <button className="primary-button" onClick={() => { const ready = readyCourseByCode.get(selected.code); if (ready) onCourse(ready); }}><Play size={16} /> Ouvrir le parcours</button> : <button className="primary-button" onClick={() => { const draft = catalogCourseDraft(selected); const remote = catalogStates[selected.code]; if (remote?.id) draft.id = remote.id; setCatalogStates((current) => ({ ...current, [selected.code]: { id: draft.id, lifecycle: "draft" } })); setPreparing({ course: draft, catalog: selected }); setSelected(null); }}><Plus size={16} /> {catalogStates[selected.code]?.lifecycle === "draft" ? "Continuer la préparation" : "Préparer ce parcours"}</button>}</footer></div></Modal>}
+    {preparing && <ManageContentModal course={preparing.course} catalogSeed={preparing.catalog} onClose={() => setPreparing(null)} onPublished={() => setCatalogStates((current) => ({ ...current, [preparing.catalog.code]: { id: preparing.course.id, lifecycle: "published" } }))} />}
   </>;
 }
 
@@ -1222,7 +1244,7 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
     let cancelled = false;
     const hydrate = async () => {
       try {
-        if (catalogSeed) await postAction("prepare-catalog-course", { courseId: course.id });
+        if (catalogSeed) await postAction("prepare-catalog-course", { courseId: course.id, category: trainingThemeFor(catalogSeed).label });
         const response = await fetch(`/.netlify/functions/lms-data?scope=course-studio&courseId=${encodeURIComponent(course.id)}`);
         const data = await response.json() as { error?: string; course?: Record<string, unknown>; modules?: Array<Record<string, unknown>>; quizzes?: Array<Record<string, unknown>> };
         if (!response.ok) throw new Error(data.error || "Chargement du studio impossible");

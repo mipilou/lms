@@ -4,10 +4,19 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("groups catalogues and exposes reactive BI insights", async () => {
-  const app = await read("../app/lms-app.tsx");
+test("groups catalogues by business themes and exposes reactive BI insights", async () => {
+  const [app, data] = await Promise.all([
+    read("../app/lms-app.tsx"),
+    read("../app/data.ts"),
+  ]);
   assert.match(app, /catalogue-category-index/);
   assert.match(app, /groupedCatalogue/);
+  assert.match(app, /Catalogues par thématique/);
+  assert.match(app, /trainingThemeFor/);
+  assert.match(data, /Informatique, IT & outils numériques/);
+  assert.match(data, /Intelligence artificielle & innovation/);
+  assert.match(data, /Cybersécurité & protection des données/);
+  assert.match(data, /Hygiène, prévention & bionettoyage/);
   assert.match(app, /Insights formation/);
   assert.match(app, /\[7, 30, 90\]/);
   assert.match(app, /Visualiser un autre espace/);
