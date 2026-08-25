@@ -101,6 +101,57 @@ type NormalizedQuizQuestion = {
   points: number;
 };
 
+type NormalizedLessonBlock = {
+  id: string;
+  type: string;
+  title: string;
+  body?: string;
+  items?: string[];
+  tone?: string;
+  prompt?: string;
+  options?: string[];
+  correctAnswer?: number;
+  explanation?: string;
+};
+
+function shortText(value: unknown, max: number) {
+  return String(value ?? "").trim().slice(0, max);
+}
+
+function normalizedStringList(value: unknown, maxItems: number, maxLength: number) {
+  return Array.isArray(value) ? value.map((item) => shortText(item, maxLength)).filter(Boolean).slice(0, maxItems) : [];
+}
+
+function normalizeLessonContent(value: unknown): { content?: { schemaVersion: string; layout: string; blocks: NormalizedLessonBlock[] }; error?: string } {
+  if (!value || typeof value !== "object") return { error: "La mise en page du module est requise" };
+  const raw = value as Record<string, unknown>;
+  if (shortText(raw.schemaVersion, 80) !== "walyah-lms-module-v1") return { error: "Version du module IA invalide" };
+  const layoutCandidate = shortText(raw.layout, 30);
+  const layout = ["signature", "atelier", "essentiel"].includes(layoutCandidate) ? layoutCandidate : "signature";
+  const rawBlocks = Array.isArray(raw.blocks) ? raw.blocks : [];
+  if (!rawBlocks.length || rawBlocks.length > 30) return { error: "Un module doit contenir entre 1 et 30 blocs pédagogiques" };
+  const allowedTypes = new Set(["hero", "text", "objectives", "steps", "callout", "case_study", "knowledge_check", "summary"]);
+  const blocks: NormalizedLessonBlock[] = [];
+  for (const [index, valueBlock] of rawBlocks.entries()) {
+    if (!valueBlock || typeof valueBlock !== "object") return { error: `Bloc ${index + 1} invalide` };
+    const block = valueBlock as Record<string, unknown>;
+    const type = shortText(block.type, 40);
+    if (!allowedTypes.has(type)) return { error: `Bloc ${index + 1} : type invalide` };
+    const title = shortText(block.title, 180) || `Section ${index + 1}`;
+    const normalized: NormalizedLessonBlock = { id: shortText(block.id, 80) || crypto.randomUUID(), type, title };
+    const body = shortText(block.body ?? block.lead ?? block.context, 12_000); if (body) normalized.body = body;
+    const items = normalizedStringList(block.items, 20, 700); if (items.length) normalized.items = items;
+    const prompt = shortText(block.prompt ?? block.question, 1_500); if (prompt) normalized.prompt = prompt;
+    const options = normalizedStringList(block.options, 6, 500); if (options.length) normalized.options = options;
+    const tone = shortText(block.tone, 20); if (["info", "success", "warning"].includes(tone)) normalized.tone = tone;
+    if (Number.isInteger(Number(block.correctAnswer))) normalized.correctAnswer = Math.max(0, Number(block.correctAnswer));
+    const explanation = shortText(block.explanation, 2_000); if (explanation) normalized.explanation = explanation;
+    if (type === "knowledge_check" && (!normalized.prompt || (normalized.options?.length ?? 0) < 2)) return { error: `Bloc ${index + 1} : question et réponses requises` };
+    blocks.push(normalized);
+  }
+  return { content: { schemaVersion: "walyah-lms-module-v1", layout, blocks } };
+}
+
 function normalizeQuizQuestions(value: unknown): { questions?: NormalizedQuizQuestion[]; error?: string } {
   const submittedQuestions = Array.isArray(value) ? value : [];
   if (!submittedQuestions.length || submittedQuestions.length > 100) {
@@ -277,6 +328,59 @@ const handler = async (request: Request) => {
       return json({ groups, members });
     }
 
+    if (scope === "search") {
+      const query = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
+      if (query.length < 2) return json({ results: [] });
+      const pattern = `%${query}%`;
+      const courseRows = isStaff
+        ? await db.sql<Record<string, unknown>>`
+            SELECT id, code, title, category, lifecycle_status
+            FROM courses
+            WHERE lifecycle_status <> 'archived'
+              AND (code ILIKE ${pattern} OR title ILIKE ${pattern} OR category ILIKE ${pattern} OR description ILIKE ${pattern})
+            ORDER BY CASE WHEN code ILIKE ${pattern} THEN 0 ELSE 1 END, published DESC, title
+            LIMIT 8
+          `
+        : await db.sql<Record<string, unknown>>`
+            SELECT c.id, c.code, c.title, c.category, c.lifecycle_status, e.progress_percent
+            FROM courses c
+            JOIN enrollments e ON e.course_id = c.id AND e.user_id = ${user.id}
+            WHERE c.published = TRUE
+              AND (c.code ILIKE ${pattern} OR c.title ILIKE ${pattern} OR c.category ILIKE ${pattern} OR c.description ILIKE ${pattern})
+            ORDER BY c.mandatory DESC, c.title
+            LIMIT 8
+          `;
+      const learnerRows = isStaff ? await db.sql<Record<string, unknown>>`
+        SELECT u.id, u.full_name, u.email, u.matricule, u.department, u.job_title, u.location, u.last_login_at,
+               COALESCE(ROUND(AVG(e.progress_percent)), 0)::INT AS progress,
+               COUNT(e.id)::INT AS assigned,
+               COUNT(e.id) FILTER (WHERE e.status = 'completed')::INT AS completed,
+               COALESCE(u.profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar
+        FROM users u
+        LEFT JOIN enrollments e ON e.user_id = u.id
+        WHERE u.role = 'learner'
+          AND (u.full_name ILIKE ${pattern} OR u.email ILIKE ${pattern} OR u.matricule ILIKE ${pattern} OR u.department ILIKE ${pattern})
+        GROUP BY u.id
+        ORDER BY u.full_name
+        LIMIT 6
+      ` : [];
+      const results = [
+        ...learnerRows.map((row) => ({
+          kind: "learner", entityId: row.id, title: row.full_name ?? row.email ?? "Apprenant",
+          subtitle: `${String(row.matricule ?? "Sans matricule")} · ${String(row.department ?? "Service non renseigné")}`,
+          email: row.email, matricule: row.matricule, department: row.department, jobTitle: row.job_title,
+          location: row.location, lastLoginAt: row.last_login_at, progress: row.progress, assigned: row.assigned,
+          completed: row.completed, hasAvatar: row.has_avatar,
+        })),
+        ...courseRows.map((row) => ({
+          kind: String(row.lifecycle_status) === "catalog" ? "catalog" : "course",
+          entityId: row.id, code: row.code, title: row.title,
+          subtitle: `${String(row.code ?? "WA")} · ${String(row.category ?? "Formation")}`,
+        })),
+      ];
+      return json({ results });
+    }
+
     if (scope === "course-studio") {
       const courseId = url.searchParams.get("courseId") ?? "";
       if (!courseId) return json({ error: "courseId requis" }, 400);
@@ -401,6 +505,7 @@ const handler = async (request: Request) => {
                      'content_type', m.content_type,
                      'duration_minutes', m.duration_minutes,
                      'learning_objectives', m.learning_objectives,
+                     'lesson_content', m.lesson_content,
                      'video_url', m.video_url,
                      'resources', COALESCE((SELECT JSONB_AGG(JSONB_BUILD_OBJECT('id', r.id, 'name', r.name, 'resource_type', r.resource_type, 'content_kind', r.content_kind, 'mime_type', r.mime_type, 'size_bytes', r.size_bytes, 'metadata', r.metadata, 'external_url', CASE WHEN r.resource_type = 'file' THEN '/.netlify/functions/upload?resourceId=' || r.id ELSE r.external_url END) ORDER BY r.created_at) FROM resources r WHERE r.module_id = m.id), '[]'::JSONB)
                    ) ORDER BY m.position)
@@ -534,6 +639,7 @@ const handler = async (request: Request) => {
                    'content_type', m.content_type,
                    'duration_minutes', m.duration_minutes,
                    'learning_objectives', m.learning_objectives,
+                   'lesson_content', m.lesson_content,
                    'video_url', m.video_url,
                    'resources', COALESCE((SELECT JSONB_AGG(JSONB_BUILD_OBJECT('id', r.id, 'name', r.name, 'resource_type', r.resource_type, 'content_kind', r.content_kind, 'mime_type', r.mime_type, 'size_bytes', r.size_bytes, 'metadata', r.metadata, 'external_url', CASE WHEN r.resource_type = 'file' THEN '/.netlify/functions/upload?resourceId=' || r.id ELSE r.external_url END) ORDER BY r.created_at) FROM resources r WHERE r.module_id = m.id), '[]'::JSONB)
                  ) ORDER BY m.position)
@@ -776,6 +882,68 @@ const handler = async (request: Request) => {
     return json({ ok: true });
   }
 
+  if (action === "import-ai-module") {
+    const courseId = String(body.courseId ?? "");
+    const rawModule = body.module && typeof body.module === "object" ? body.module as Record<string, unknown> : null;
+    if (!courseId || !rawModule) return json({ error: "Formation et module IA requis" }, 400);
+    const title = shortText(rawModule.title, 220);
+    if (!title) return json({ error: "Le module IA doit contenir un titre" }, 400);
+    const courseRows = await db.sql<{ id: string }>`SELECT id FROM courses WHERE id = ${courseId} AND lifecycle_status <> 'catalog' LIMIT 1`;
+    if (!courseRows[0]) return json({ error: "Préparez d’abord cette formation depuis le catalogue" }, 409);
+    const normalizedLesson = normalizeLessonContent(rawModule.lessonContent);
+    if (!normalizedLesson.content) return json({ error: normalizedLesson.error ?? "Mise en page IA invalide" }, 400);
+    const objectives = normalizedStringList(rawModule.objectives, 20, 500);
+    const contentTypeCandidate = shortText(rawModule.contentType, 30);
+    const contentType = ["text", "video", "document", "audio", "scorm", "quiz"].includes(contentTypeCandidate) ? contentTypeCandidate : "text";
+    const durationMinutes = Math.min(1_440, Math.max(0, Math.round(Number(rawModule.durationMinutes ?? 15))));
+    const position = Math.max(1, Math.round(Number(body.position ?? 1)));
+    const rawResources = Array.isArray(rawModule.resources) ? rawModule.resources.slice(0, 25) : [];
+    const resources: Array<{ name: string; url: string; kind: string }> = [];
+    for (const [index, valueResource] of rawResources.entries()) {
+      if (!valueResource || typeof valueResource !== "object") return json({ error: `Ressource ${index + 1} invalide` }, 400);
+      const resource = valueResource as Record<string, unknown>;
+      const externalUrl = shortText(resource.url, 2_000);
+      let parsed: URL;
+      try { parsed = new URL(externalUrl); } catch { return json({ error: `Ressource ${index + 1} : URL invalide` }, 400); }
+      if (parsed.protocol !== "https:") return json({ error: `Ressource ${index + 1} : une URL HTTPS est requise` }, 400);
+      const kindCandidate = shortText(resource.kind, 30);
+      resources.push({ name: shortText(resource.name, 220) || `Ressource ${index + 1}`, url: parsed.toString(), kind: ["video", "audio", "document", "external", "drive"].includes(kindCandidate) ? kindCandidate : "external" });
+    }
+    const moduleId = crypto.randomUUID();
+    const createdResources: Array<{ id: string; name: string; content_kind: string; external_url: string }> = [];
+    const client = await db.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO modules (id, course_id, position, title, description, content_type, duration_minutes, learning_objectives, lesson_content, published)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::JSONB, $9::JSONB, TRUE)`,
+        [moduleId, courseId, position, title, shortText(rawModule.summary, 5_000), contentType, durationMinutes, JSON.stringify(objectives), JSON.stringify(normalizedLesson.content)],
+      );
+      for (const resource of resources) {
+        const resourceId = crypto.randomUUID();
+        await client.query(
+          `INSERT INTO resources (id, module_id, name, resource_type, content_kind, external_url, uploaded_by)
+           VALUES ($1, $2, $3, 'link', $4, $5, $6)`,
+          [resourceId, moduleId, resource.name, resource.kind, resource.url, user.id],
+        );
+        createdResources.push({ id: resourceId, name: resource.name, content_kind: resource.kind, external_url: resource.url });
+      }
+      await client.query("UPDATE courses SET updated_at = NOW() WHERE id = $1", [courseId]);
+      await client.query(
+        `INSERT INTO activity_events (id, actor_id, event_type, entity_type, entity_id, summary, metadata)
+         VALUES ($1, $2, 'module.ai_imported', 'module', $3, 'Module généré par IA importé', $4::JSONB)`,
+        [crypto.randomUUID(), user.id, moduleId, JSON.stringify({ courseId, schemaVersion: "walyah-lms-module-v1", fileResources: resources.length })],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    return json({ ok: true, moduleId, resources: createdResources }, 201);
+  }
+
   if (action === "save-module") {
     const courseId = String(body.courseId ?? "");
     const requestedId = String(body.moduleId ?? "");
@@ -784,6 +952,9 @@ const handler = async (request: Request) => {
     const allowedContentTypes = new Set(["text", "video", "document", "audio", "scorm", "quiz"]);
     if (!courseId || !title) return json({ error: "Formation et titre du module requis" }, 400);
     if (!allowedContentTypes.has(contentType)) return json({ error: "Type de module invalide" }, 400);
+    const normalizedLesson = body.lessonContent ? normalizeLessonContent(body.lessonContent) : {};
+    if (normalizedLesson.error) return json({ error: normalizedLesson.error }, 400);
+    const lessonContentJson = normalizedLesson.content ? JSON.stringify(normalizedLesson.content) : null;
     const courseRows = await db.sql<{ id: string }>`SELECT id FROM courses WHERE id = ${courseId} AND lifecycle_status <> 'catalog' LIMIT 1`;
     if (!courseRows[0]) return json({ error: "Formation en préparation introuvable" }, 404);
     const objectives = Array.isArray(body.objectives) ? body.objectives.map(String).map((item) => item.trim()).filter(Boolean).slice(0, 20) : [];
@@ -796,14 +967,15 @@ const handler = async (request: Request) => {
       await db.sql`
         UPDATE modules SET position = ${position}, title = ${title}, description = ${String(body.description ?? "")},
           content_type = ${contentType}, body = ${String(body.body ?? "")}, duration_minutes = ${durationMinutes},
-          learning_objectives = ${JSON.stringify(objectives)}, published = ${body.published !== false}, updated_at = NOW()
+          learning_objectives = ${JSON.stringify(objectives)}, lesson_content = COALESCE(${lessonContentJson}, lesson_content),
+          published = ${body.published !== false}, updated_at = NOW()
         WHERE id = ${moduleId} AND course_id = ${courseId}
       `;
     } else {
       moduleId = crypto.randomUUID();
       await db.sql`
         INSERT INTO modules (id, course_id, position, title, description, content_type, body, duration_minutes, learning_objectives, lesson_content, published)
-        VALUES (${moduleId}, ${courseId}, ${position}, ${title}, ${String(body.description ?? "")}, ${contentType}, ${String(body.body ?? "")}, ${durationMinutes}, ${JSON.stringify(objectives)}, ${JSON.stringify({ status: "draft" })}, ${body.published !== false})
+        VALUES (${moduleId}, ${courseId}, ${position}, ${title}, ${String(body.description ?? "")}, ${contentType}, ${String(body.body ?? "")}, ${durationMinutes}, ${JSON.stringify(objectives)}, ${lessonContentJson ?? JSON.stringify({ status: "draft" })}, ${body.published !== false})
       `;
     }
     await db.sql`UPDATE courses SET updated_at = NOW() WHERE id = ${courseId}`;
@@ -815,19 +987,21 @@ const handler = async (request: Request) => {
     const externalUrl = String(body.url ?? "");
     const name = String(body.name ?? "Ressource externe").trim() || "Ressource externe";
     const requestedKind = action === "add-video-link" ? "video" : String(body.contentKind ?? "external");
-    const contentKind = ["video", "audio", "external"].includes(requestedKind) ? requestedKind : "external";
+    const contentKind = ["video", "audio", "document", "external", "drive"].includes(requestedKind) ? requestedKind : "external";
+    const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : {};
     let parsed: URL;
     try { parsed = new URL(externalUrl); } catch { return json({ error: "Adresse du lien invalide" }, 400); }
     if (parsed.protocol !== "https:") return json({ error: "Une adresse HTTPS est requise" }, 400);
+    if (contentKind === "drive" && !["drive.google.com", "docs.google.com"].some((domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`))) return json({ error: "Le lien doit provenir de Google Drive ou Google Docs" }, 400);
     const moduleRows = await db.sql<{ id: string }>`SELECT id FROM modules WHERE id = ${moduleId} LIMIT 1`;
     if (!moduleRows[0]) return json({ error: "Module introuvable" }, 404);
     const resourceId = crypto.randomUUID();
     if (contentKind === "video") await db.sql`UPDATE modules SET content_type = 'video', video_url = ${externalUrl}, updated_at = NOW() WHERE id = ${moduleId}`;
     await db.sql`
-      INSERT INTO resources (id, module_id, name, resource_type, content_kind, external_url, uploaded_by)
-      VALUES (${resourceId}, ${moduleId}, ${name}, 'link', ${contentKind}, ${externalUrl}, ${user.id})
+      INSERT INTO resources (id, module_id, name, resource_type, content_kind, external_url, metadata, uploaded_by)
+      VALUES (${resourceId}, ${moduleId}, ${name}, 'link', ${contentKind}, ${externalUrl}, ${JSON.stringify(metadata)}, ${user.id})
     `;
-    return json({ ok: true, resource: { id: resourceId, name, resource_type: "link", content_kind: contentKind, external_url: externalUrl } }, 201);
+    return json({ ok: true, resource: { id: resourceId, name, resource_type: "link", content_kind: contentKind, external_url: externalUrl, metadata } }, 201);
   }
 
   if (action === "publish-course") {

@@ -86,12 +86,17 @@ Dans **Project configuration → Environment variables**, ajoutez :
 | `NEXT_PUBLIC_SITE_URL` | URL HTTPS finale du LMS, sans barre oblique finale |
 | `PASSPORT_WEBHOOK_SECRET` | secret aléatoire d’au moins 32 caractères partagé uniquement entre les deux serveurs |
 | `PASSPORT_ALLOWED_ORIGIN` | `https://passeportcdl.netlify.app` |
+| `NEXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID` | identifiant OAuth Web Google utilisé par le sélecteur Drive |
+| `NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY` | clé API Google de navigateur, restreinte au domaine Netlify |
+| `NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID` | numéro du projet Google Cloud |
 
 Après modification d’une variable, relancez un déploiement.
 
 ## 7. Fichiers pédagogiques
 
 Les imports PDF, Word, PowerPoint, MP4/WebM, MP3/WAV/M4A/OGG/AAC et SCORM ZIP passent par `/.netlify/functions/upload`. Les fichiers sont validés, limités à 50 Mo et stockés dans Netlify Blobs, store `walyah-lms-content`. Le navigateur les envoie automatiquement par blocs de 3 Mo pour rester sous la limite des requêtes binaires des fonctions Netlify. Pour SCORM, le manifeste et l’intégrité du ZIP sont contrôlés après reconstitution. Les métadonnées sont enregistrées dans `resources`.
+
+Pour un fichier plus volumineux, utilisez **Relier Google Drive** dans le Studio. Seuls le lien et les métadonnées sont alors stockés dans le LMS ; le fichier reste dans Drive et n’est pas soumis à la limite d’import binaire. La configuration détaillée se trouve dans [`GOOGLE-DRIVE.md`](GOOGLE-DRIVE.md).
 
 Les photos JPG, PNG et WebP sont limitées à 4 Mo et stockées séparément dans le store privé `walyah-lms-avatars`. Un apprenant modifie uniquement sa propre photo ; les administrateurs peuvent la consulter depuis sa fiche.
 

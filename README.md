@@ -19,7 +19,10 @@ Application de gestion de la formation conçue pour Walyah Académie : authentif
 - journal intelligent des connexions et activités, classé par période et catégorie, filtrable, exportable et navigable par clic ;
 - 144 formations structurées issues des deux catalogues 2026 transmis, classées dans 13 domaines thématiques (IT, IA, cybersécurité, soins, hygiène, management, administration, etc.) ;
 - 6 parcours déjà scénarisés avec modules pédagogiques ;
+- recherche globale fonctionnelle au clavier ou au clic, avec résultats navigables vers les apprenants, parcours, catalogues et rubriques ;
 - studio guidé de préparation depuis le catalogue, modules réordonnables, liens vidéo/audio/web et dépôt segmenté compatible Netlify de PDF/DOCX/PPTX/MP4/WebM/audio/SCORM ;
+- import direct de modules produits par une IA au format JSON Walyah v1, double validation client/serveur, trois mises en page et éditeur visuel par blocs ;
+- connexion Google Drive par sélecteur officiel ou lien partagé pour référencer les fichiers volumineux sans les faire transiter par la fonction d’import ;
 - stockage relationnel dans Netlify Database et fichiers dans Netlify Blobs ;
 - API HMAC bidirectionnelle pour le Passeport de formation ;
 - éditeur de questions à choix unique, choix multiples, vrai/faux et réponse courte, avec import JSON/Excel confirmé par la base, modification, suppression tracée, publication et affectation à un apprenant ou à un groupe ;
@@ -54,6 +57,8 @@ Les migrations SQL placées dans `netlify/database/migrations/` sont appliquées
 Les principales tables sont `users`, `passport_employees`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `quiz_assignments`, `training_groups`, `training_group_members`, `certificates`, `login_events`, `activity_events`, `training_requests`, `passport_connections`, `integration_events` et `role_audit_events`.
 
 Les fichiers pédagogiques sont conservés dans le store Netlify Blobs `walyah-lms-content` et les photos de profil dans `walyah-lms-avatars`; la base conserve uniquement les métadonnées et les liens métier.
+
+Le format d’import IA est documenté dans [`docs/FORMAT-MODULE-IA.md`](docs/FORMAT-MODULE-IA.md). La mise en service du sélecteur Google Drive est décrite dans [`docs/GOOGLE-DRIVE.md`](docs/GOOGLE-DRIVE.md).
 
 ## Passeport de formation
 

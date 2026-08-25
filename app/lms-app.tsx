@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Archive, ArrowLeft, Award, Bell, BookOpen, Check, CheckCircle2,
@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import {
   catalogueTotals, courses, readyCourseByCode, trainingCatalogue, trainingThemeFor, trainingThemes,
-  type CatalogCourse, type Course, type Learner,
+  type CatalogCourse, type Course, type Learner, type LessonBlock, type LessonBlockType, type LessonContent,
 } from "./data";
+import { importAiModuleFile } from "./ai-module-import";
+import { googleDriveConfigured, pickGoogleDriveFile } from "./google-drive-picker";
 import { emptyQuizQuestion, importQuizFile, type DraftQuizQuestion, type QuizQuestionType } from "./quiz-import";
 
 export type Role = "learner" | "admin" | "super_admin";
@@ -93,6 +95,16 @@ type QuizAdminRecord = {
   averageScore: number;
   assignedUsers: number;
   assignedGroups: number;
+};
+type GlobalSearchResult = {
+  id: string;
+  kind: "navigation" | "course" | "catalog" | "learner";
+  title: string;
+  subtitle: string;
+  view?: View;
+  entityId?: string;
+  code?: string;
+  learner?: Learner;
 };
 type AdminSnapshot = {
   learners: number;
@@ -330,6 +342,19 @@ function parseModulePayload(value: unknown): Array<Record<string, unknown>> {
   }
 }
 
+function lessonContentFromValue(value: unknown): LessonContent | undefined {
+  let parsed = value;
+  if (typeof value === "string") {
+    try { parsed = JSON.parse(value) as unknown; } catch { return undefined; }
+  }
+  if (!parsed || typeof parsed !== "object") return undefined;
+  const raw = parsed as Record<string, unknown>;
+  const blocks = Array.isArray(raw.blocks) ? raw.blocks.filter((block): block is LessonBlock => Boolean(block && typeof block === "object" && typeof (block as Record<string, unknown>).type === "string")) : [];
+  if (!blocks.length) return undefined;
+  const layout = ["signature", "atelier", "essentiel"].includes(String(raw.layout)) ? String(raw.layout) as LessonContent["layout"] : "signature";
+  return { schemaVersion: "walyah-lms-module-v1", layout, blocks };
+}
+
 function courseFromRow(row: Record<string, unknown>): Course {
   const id = String(row.id ?? `course-${String(row.code ?? "unknown")}`);
   const code = String(row.code ?? "");
@@ -349,6 +374,7 @@ function courseFromRow(row: Record<string, unknown>): Course {
       summary: String(module.description ?? "Contenu pédagogique en préparation."),
       points: objectives,
       videoUrl: module.video_url ? String(module.video_url) : undefined,
+      lessonContent: lessonContentFromValue(module.lesson_content),
       resources,
     };
   }) : (template?.moduleContent ?? []);
@@ -536,12 +562,76 @@ function Sidebar({ role, view, onView, open, onClose }: { role: Role; view: View
   </>;
 }
 
-function Topbar({ session, avatarUrl, onMenu, onLogout }: { session: Session; avatarUrl?: string; onMenu: () => void; onLogout: () => void }) {
+function Topbar({ session, avatarUrl, assignedCourses, onMenu, onLogout, onSearchResult }: { session: Session; avatarUrl?: string; assignedCourses: Course[]; onMenu: () => void; onLogout: () => void; onSearchResult: (result: GlobalSearchResult) => void }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [remoteResults, setRemoteResults] = useState<GlobalSearchResult[]>([]);
+  const [remoteQuery, setRemoteQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLFormElement>(null);
+  const isLearner = session.role === "learner";
+
+  const localIndex = useMemo<GlobalSearchResult[]>(() => {
+    const nav = (isLearner ? learnerNav : adminNav).map((item) => ({ id: `nav-${item.id}`, kind: "navigation" as const, title: item.label, subtitle: "Ouvrir cette rubrique", view: item.id }));
+    if (isLearner) return [...nav, ...assignedCourses.map((course) => ({ id: `course-${course.id}`, kind: "course" as const, title: course.title, subtitle: `${course.code} · ${course.category} · ${course.progress} %`, entityId: course.id, code: course.code }))];
+    const catalogue = trainingCatalogue.map((item) => ({ id: `catalog-${item.code}`, kind: "catalog" as const, title: item.title, subtitle: `${item.code} · ${trainingThemeFor(item).label}`, code: item.code }));
+    return [...nav, ...catalogue];
+  }, [assignedCourses, isLearner]);
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault(); setMobileOpen(true); setOpen(true); window.setTimeout(() => inputRef.current?.focus(), 0);
+      }
+      if (event.key === "Escape") { setOpen(false); setMobileOpen(false); inputRef.current?.blur(); }
+    };
+    const outside = (event: PointerEvent) => { if (!containerRef.current?.contains(event.target as Node)) { setOpen(false); setMobileOpen(false); } };
+    window.addEventListener("keydown", shortcut); document.addEventListener("pointerdown", outside);
+    return () => { window.removeEventListener("keydown", shortcut); document.removeEventListener("pointerdown", outside); };
+  }, []);
+
+  useEffect(() => {
+    const normalized = query.trim();
+    if (isLearner || normalized.length < 2 || !usesNetlifyIdentity()) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      void fetch(`/.netlify/functions/lms-data?scope=search&q=${encodeURIComponent(normalized)}`, { signal: controller.signal }).then(async (response) => {
+        const data = await response.json() as { results?: Array<Record<string, unknown>>; error?: string };
+        if (!response.ok) throw new Error(data.error || "Recherche indisponible");
+        setRemoteQuery(normalized.toLocaleLowerCase("fr"));
+        setRemoteResults((data.results ?? []).map((item): GlobalSearchResult => {
+          const kind = String(item.kind ?? "course") as GlobalSearchResult["kind"];
+          const learner = kind === "learner" ? {
+            id: String(item.entityId), matricule: String(item.matricule ?? "À renseigner"), name: String(item.title ?? "Apprenant"), initials: initialsFrom(String(item.title ?? "Apprenant")), email: String(item.email ?? ""), phone: "À renseigner", avatarUrl: Boolean(item.hasAvatar) ? avatarEndpoint(String(item.entityId)) : undefined,
+            department: String(item.department ?? "Non renseigné"), jobTitle: String(item.jobTitle ?? "Non renseigné"), manager: "À renseigner", hireDate: "À renseigner", location: String(item.location ?? "Non renseigné"), progress: Number(item.progress ?? 0), completed: Number(item.completed ?? 0), assigned: Number(item.assigned ?? 0), lastLogin: item.lastLoginAt ? formatDate(item.lastLoginAt) : "Jamais", lastLoginDetail: item.lastLoginAt ? new Date(String(item.lastLoginAt)).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "", status: "Actif" as const, passportStatus: "À connecter" as const, trainings: [],
+          } : undefined;
+          return { id: `${kind}-${String(item.entityId ?? item.code)}`, kind, title: String(item.title ?? "Résultat"), subtitle: String(item.subtitle ?? ""), entityId: item.entityId ? String(item.entityId) : undefined, code: item.code ? String(item.code) : undefined, learner };
+        }));
+      }).catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) setRemoteResults([]); }).finally(() => setSearching(false));
+    }, 260);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [isLearner, query]);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase("fr");
+  const localResults = normalizedQuery ? localIndex.filter((item) => `${item.title} ${item.subtitle} ${item.code ?? ""}`.toLocaleLowerCase("fr").includes(normalizedQuery)).slice(0, 8) : localIndex.filter((item) => item.kind === "navigation").slice(0, 7);
+  const results = [...(remoteQuery === normalizedQuery ? remoteResults : []), ...localResults].filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 10);
+  const choose = (result: GlobalSearchResult) => { onSearchResult(result); setQuery(""); setOpen(false); setMobileOpen(false); };
+  const submit = (event: FormEvent) => { event.preventDefault(); if (results[0]) choose(results[0]); else setOpen(true); };
+  const resultIcon = (kind: GlobalSearchResult["kind"]) => kind === "learner" ? <UserRound size={17} /> : kind === "navigation" ? <LayoutDashboard size={17} /> : kind === "catalog" ? <BookOpen size={17} /> : <LibraryBig size={17} />;
+
   return <header className="topbar">
     <button className="icon-button mobile-menu" aria-label="Ouvrir le menu" onClick={onMenu}><Menu size={21} /></button>
-    <div className="global-search"><Search size={18} /><input aria-label="Rechercher" placeholder={session.role === "learner" ? "Rechercher une formation…" : "Rechercher un apprenant, une formation…"} /><kbd>⌘ K</kbd></div>
+    <form ref={containerRef} className={`global-search ${mobileOpen ? "is-mobile-open" : ""}`} role="search" onSubmit={submit}>
+      <button className="global-search-submit" type="submit" aria-label="Lancer la recherche"><Search size={18} /></button>
+      <input ref={inputRef} aria-label="Rechercher" value={query} onChange={(event) => { setQuery(event.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={isLearner ? "Rechercher une formation…" : "Apprenant, formation, rubrique…"} autoComplete="off" />
+      {query ? <button className="global-search-clear" type="button" aria-label="Effacer la recherche" onClick={() => { setQuery(""); inputRef.current?.focus(); }}><X size={15} /></button> : <kbd>⌘ K</kbd>}
+      {open && <div className="global-search-results" role="listbox" aria-label="Résultats de recherche"><header><span>{query ? "Résultats" : "Accès rapides"}</span><small>{searching ? "Recherche dans la base…" : `${results.length} proposition${results.length > 1 ? "s" : ""}`}</small></header>{results.length ? results.map((result) => <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => choose(result)}><span className={`search-result-icon kind-${result.kind}`}>{resultIcon(result.kind)}</span><span><strong>{result.title}</strong><small>{result.subtitle}</small></span><ChevronRight size={15} /></button>) : <div className="search-empty"><Search size={20} /><span>Aucun résultat. Essayez un nom, un code ou une thématique.</span></div>}</div>}
+    </form>
     <div className="topbar-brand"><Brand compact /></div>
-    <div className="topbar-actions"><div className="profile-chip"><UserAvatar name={session.name} initials={session.initials} src={avatarUrl} /><span className="profile-copy"><strong>{session.name}</strong><small>{roleLabel(session.role)}</small></span><button className="icon-button" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout}><LogOut size={18} /></button></div><button className="icon-button notification-button" aria-label="Ouvrir les notifications" title="Notifications"><Bell size={20} /></button></div>
+    <div className="topbar-actions"><button className="icon-button mobile-search-button" aria-label="Rechercher" onClick={() => { setMobileOpen(true); setOpen(true); window.setTimeout(() => inputRef.current?.focus(), 0); }}><Search size={19} /></button><div className="profile-chip"><UserAvatar name={session.name} initials={session.initials} src={avatarUrl} /><span className="profile-copy"><strong>{session.name}</strong><small>{roleLabel(session.role)}</small></span><button className="icon-button" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout}><LogOut size={18} /></button></div><button className="icon-button notification-button" aria-label="Ouvrir les notifications" title="Notifications"><Bell size={20} /></button></div>
   </header>;
 }
 
@@ -750,7 +840,7 @@ function themeIcon(themeId: string) {
   return themeId === "it" ? <Settings size={18} /> : <BookOpen size={18} />;
 }
 
-function FullCatalogueView({ onCourse }: { onCourse: (course: Course) => void }) {
+function FullCatalogueView({ onCourse, focusCode, onFocusHandled }: { onCourse: (course: Course) => void; focusCode?: string; onFocusHandled?: () => void }) {
   const [query, setQuery] = useState("");
   const [themeId, setThemeId] = useState("all");
   const [source, setSource] = useState("Tous les catalogues");
@@ -780,6 +870,16 @@ function FullCatalogueView({ onCourse }: { onCourse: (course: Course) => void })
     }).catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    if (!focusCode) return;
+    const frame = window.requestAnimationFrame(() => {
+      const match = trainingCatalogue.find((item) => item.code === focusCode);
+      if (match) { setSelected(match); setThemeId(trainingThemeFor(match).id); setQuery(""); setLimit(24); }
+      onFocusHandled?.();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusCode, onFocusHandled]);
+
   return <>
     <section className="page-heading catalogue-heading"><div><span className="eyebrow">Offre Walyah Académie 2026</span><h1>Catalogues par thématique</h1><p>Les formations sont regroupées par grands domaines pour retrouver rapidement un parcours IT, santé, management, hygiène, IA ou cybersécurité.</p></div><div className="catalogue-downloads"><span className="count-badge"><BookOpen size={15} /> {catalogueTotals.all} formations intégrées</span><a className="secondary-button" href="/catalogues/catalogue-walyah-academie-2026-complet.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue complet</a><a className="secondary-button" href="/catalogues/catalogue-formations-medicales-2026.pdf" target="_blank" rel="noreferrer"><FileText size={15} /> Catalogue médical</a></div></section>
     <section className="catalogue-insights"><article><strong>{catalogueTotals.all}</strong><span>formations indexées</span></article><article><strong>{themeCounts.length}</strong><span>domaines thématiques</span></article><article><strong>2</strong><span>catalogues 2026</span></article><article><strong>{courses.length}</strong><span>parcours scénarisés</span></article></section>
@@ -792,6 +892,22 @@ function FullCatalogueView({ onCourse }: { onCourse: (course: Course) => void })
     {selected && <Modal title={`${selected.code} · ${selected.title}`} onClose={() => setSelected(null)} wide><div className="catalogue-detail"><div className="catalogue-detail-meta"><span>{trainingThemeFor(selected).label}</span><span><Clock3 size={14} /> {selected.duration}</span><span><UsersRound size={14} /> {selected.audience}</span></div>{selected.need && <section><span className="form-section-title">Besoin professionnel</span><p>{selected.need}</p></section>}<section><span className="form-section-title">Objectif</span><p>{selected.objective ?? selected.description}</p></section>{selected.program?.length ? <section><span className="form-section-title">Programme proposé</span><ol>{selected.program.map((item) => <li key={item}>{item}</li>)}</ol></section> : <section><span className="form-section-title">Public ou métier d’origine</span><p>{selected.theme}</p></section>}{selected.methods && <section><span className="form-section-title">Méthodes pédagogiques</span><p>{selected.methods}</p></section>}{selected.benefit && <section><span className="form-section-title">Bénéfice attendu</span><p>{selected.benefit}</p></section>}<footer><div><small>Source</small><strong>{selected.source}</strong></div>{readyCourseByCode.has(selected.code) ? <button className="primary-button" onClick={() => { const ready = readyCourseByCode.get(selected.code); if (ready) onCourse(ready); }}><Play size={16} /> Ouvrir le parcours</button> : <button className="primary-button" onClick={() => { const draft = catalogCourseDraft(selected); const remote = catalogStates[selected.code]; if (remote?.id) draft.id = remote.id; setCatalogStates((current) => ({ ...current, [selected.code]: { id: draft.id, lifecycle: "draft" } })); setPreparing({ course: draft, catalog: selected }); setSelected(null); }}><Plus size={16} /> {catalogStates[selected.code]?.lifecycle === "draft" ? "Continuer la préparation" : "Préparer ce parcours"}</button>}</footer></div></Modal>}
     {preparing && <ManageContentModal course={preparing.course} catalogSeed={preparing.catalog} onClose={() => setPreparing(null)} onPublished={() => setCatalogStates((current) => ({ ...current, [preparing.catalog.code]: { id: preparing.course.id, lifecycle: "published" } }))} />}
   </>;
+}
+
+function LessonBlocks({ content }: { content: LessonContent }) {
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  return <section className={`learner-lesson-blocks layout-${content.layout}`}>{content.blocks.map((block) => {
+    if (block.type === "hero") return <article className="learner-block learner-hero" key={block.id}><span className="eyebrow">Module interactif</span><h2>{block.title}</h2>{block.body && <p>{block.body}</p>}</article>;
+    if (block.type === "callout") return <article className={`learner-block learner-callout tone-${block.tone ?? "info"}`} key={block.id}><CircleHelp size={20} /><div><h3>{block.title}</h3>{block.body && <p>{block.body}</p>}</div></article>;
+    if (block.type === "case_study") return <article className="learner-block learner-case" key={block.id}><span><ClipboardCheck size={21} /></span><div><small>Cas pratique</small><h3>{block.title}</h3>{block.body && <p>{block.body}</p>}{block.prompt && <strong>{block.prompt}</strong>}</div></article>;
+    if (block.type === "knowledge_check") {
+      const selected = answers[block.id];
+      const answered = selected !== undefined;
+      return <article className="learner-block learner-check" key={block.id}><span className="eyebrow">Vérification rapide</span><h3>{block.prompt || block.title}</h3><div>{(block.options ?? []).map((option, index) => <button className={answered ? index === block.correctAnswer ? "correct" : selected === index ? "incorrect" : "" : ""} key={`${block.id}-${option}`} onClick={() => setAnswers((current) => ({ ...current, [block.id]: index }))} disabled={answered}><span>{String.fromCharCode(65 + index)}</span>{option}{answered && index === block.correctAnswer && <Check size={15} />}</button>)}</div>{answered && <p className={selected === block.correctAnswer ? "check-feedback success" : "check-feedback warning"}>{selected === block.correctAnswer ? "Bonne réponse. " : "Réponse à revoir. "}{block.explanation}</p>}</article>;
+    }
+    const items = block.items ?? [];
+    return <article className={`learner-block learner-${block.type}`} key={block.id}><span className="eyebrow">{block.type === "steps" ? "Méthode" : block.type === "summary" ? "Synthèse" : block.type === "objectives" ? "Objectifs" : "Contenu"}</span><h3>{block.title}</h3>{block.body && <p>{block.body}</p>}{items.length > 0 && (block.type === "steps" ? <ol>{items.map((item, index) => <li key={`${block.id}-${item}`}><span>{index + 1}</span>{item}</li>)}</ol> : <ul>{items.map((item) => <li key={`${block.id}-${item}`}><Check size={15} />{item}</li>)}</ul>)}</article>;
+  })}</section>;
 }
 
 function CourseDetail({ course, onBack, onQuiz, onCertificate }: { course: Course; onBack: () => void; onQuiz: () => void; onCertificate: () => void }) {
@@ -835,7 +951,7 @@ function CourseDetail({ course, onBack, onQuiz, onCertificate }: { course: Cours
     <section className="course-player-grid">
       <div className="course-main-column">
         <div className="video-player"><span className="video-grid" /><div className="video-badge">{activeContent.type === "video" ? <Video size={15} /> : <FileText size={15} />} {activeContent.type === "video" ? "Vidéo" : activeContent.type === "case" ? "Étude de cas" : activeContent.type === "quiz" ? "Évaluation" : "Cours"} · {activeContent.duration}</div>{activeContent.videoUrl ? <a className="play-button" href={activeContent.videoUrl} target="_blank" rel="noreferrer" aria-label="Ouvrir la vidéo"><Play size={34} fill="currentColor" /></a> : <span className="play-button play-button-disabled" aria-label="Aucun média publié"><FileText size={30} /></span>}<div className="video-caption"><small>Module {activeModule}</small><strong>{activeContent.title}</strong></div></div>
-        <article className="panel lesson-content"><div className="panel-heading"><div><span className="eyebrow">À retenir</span><h3>Objectifs de ce module</h3></div>{activeContent.videoUrl && <a className="resource-link" href={activeContent.videoUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ouvrir la vidéo</a>}</div><p>{activeContent.summary}</p>{activeContent.points.length ? <ul>{activeContent.points.map((point) => <li key={point}><Check size={15} /> {point}</li>)}</ul> : <p className="muted-copy">Les objectifs détaillés seront ajoutés par l’équipe pédagogique.</p>}<div className="lesson-actions"><button className="primary-button" onClick={markComplete} disabled={saving}><CheckCircle2 size={17} /> {saving ? "Enregistrement…" : "Marquer comme terminé"}</button></div></article>
+        {activeContent.lessonContent ? <><LessonBlocks content={activeContent.lessonContent} /><div className="lesson-completion-bar"><span><CheckCircle2 size={18} /><span><strong>Vous avez parcouru ce module</strong><small>Validez-le pour enregistrer votre progression.</small></span></span><button className="primary-button" onClick={markComplete} disabled={saving}><CheckCircle2 size={17} /> {saving ? "Enregistrement…" : "Marquer comme terminé"}</button></div></> : <article className="panel lesson-content"><div className="panel-heading"><div><span className="eyebrow">À retenir</span><h3>Objectifs de ce module</h3></div>{activeContent.videoUrl && <a className="resource-link" href={activeContent.videoUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Ouvrir la vidéo</a>}</div><p>{activeContent.summary}</p>{activeContent.points.length ? <ul>{activeContent.points.map((point) => <li key={point}><Check size={15} /> {point}</li>)}</ul> : <p className="muted-copy">Les objectifs détaillés seront ajoutés par l’équipe pédagogique.</p>}<div className="lesson-actions"><button className="primary-button" onClick={markComplete} disabled={saving}><CheckCircle2 size={17} /> {saving ? "Enregistrement…" : "Marquer comme terminé"}</button></div></article>}
         <article className="panel resources-panel"><div className="panel-heading"><div><span className="eyebrow">Documents</span><h3>Ressources du module</h3></div></div>{activeContent.resources?.length ? <div className="resource-list">{activeContent.resources.map((resource, index) => resource.url ? <a key={`${resource.name}-${index}`} href={resource.url} target="_blank" rel="noreferrer"><span className="resource-icon link"><Link2 size={19} /></span><span><strong>{resource.name}</strong><small>{resource.type}</small></span><ExternalLink size={17} /></a> : <div key={`${resource.name}-${index}`}><span className="resource-icon pdf"><FileText size={19} /></span><span><strong>{resource.name}</strong><small>{resource.type}</small></span></div>)}</div> : <div className="table-empty"><FileText size={22} /><strong>Aucune ressource jointe</strong><span>Les documents publiés par l’administrateur apparaîtront ici.</span></div>}</article>
       </div>
       <aside className="module-sidebar panel"><div className="module-sidebar-head"><span className="eyebrow">Sommaire</span><h3>{course.modules} modules</h3><div className="linear-progress"><span style={{ width: `${progress}%` }} /></div><small>{progress} % complété</small></div><div className="module-list">{course.moduleContent.map((item, index) => { const number = index + 1; const done = number <= completedModules; const active = number === activeModule; return <button key={item.id ?? `${course.id}-${number}`} className={active ? "active" : ""} onClick={() => setActiveModule(number)}><span className={done ? "module-status done" : "module-status"}>{done ? <Check size={14} /> : number}</span><span><small>Module {number} · {item.duration}</small><strong>{item.title}</strong></span>{active && <Play size={14} fill="currentColor" />}</button>; })}</div>{course.quiz && <div className="quiz-callout"><span><FileQuestion size={20} /></span><div><strong>{course.quiz.title}</strong><p>Seuil de réussite : {course.quiz.threshold} %</p></div><button onClick={onQuiz}>Démarrer le QCM</button></div>}</aside>
@@ -1275,7 +1391,34 @@ function CreateCourseModal({ onClose, onCreate }: { onClose: () => void; onCreat
 }
 
 type StudioResource = { id?: string; name: string; type: string; contentKind: string; url?: string; sizeBytes?: number; metadata?: Record<string, unknown> };
-type StudioModule = { id: string; title: string; description: string; contentType: string; durationMinutes: number; objectives: string[]; published: boolean; resources: StudioResource[] };
+type StudioModule = { id: string; title: string; description: string; contentType: string; durationMinutes: number; objectives: string[]; published: boolean; resources: StudioResource[]; layout: LessonContent["layout"]; blocks: LessonBlock[] };
+
+function studioStarterBlocks(title: string, description = "", objectives: string[] = []): LessonBlock[] {
+  return [
+    { id: crypto.randomUUID(), type: "hero", title, body: description || "Présentez ici la promesse et l’utilité concrète du module." },
+    { id: crypto.randomUUID(), type: "objectives", title: "Objectifs pédagogiques", items: objectives.length ? objectives : ["Comprendre le sujet", "Appliquer la méthode", "Vérifier les acquis"] },
+    { id: crypto.randomUUID(), type: "text", title: "L’essentiel", body: "Développez le contenu avec des exemples courts, des repères visuels et des consignes directement applicables." },
+    { id: crypto.randomUUID(), type: "summary", title: "À retenir", items: ["Un message clé", "Une action à tester", "Un point de vigilance"] },
+  ];
+}
+
+function studioBlockLabel(type: LessonBlockType) {
+  return ({ hero: "Ouverture", text: "Texte", objectives: "Objectifs", steps: "Étapes", callout: "Encadré", case_study: "Cas pratique", knowledge_check: "Question flash", summary: "Synthèse" } satisfies Record<LessonBlockType, string>)[type];
+}
+
+function newStudioBlock(type: LessonBlockType): LessonBlock {
+  const templates: Record<LessonBlockType, Omit<LessonBlock, "id" | "type">> = {
+    hero: { title: "Nouvelle ouverture", body: "Introduisez le sujet en une phrase engageante." },
+    text: { title: "Nouvelle section", body: "Rédigez ici un contenu clair et directement exploitable." },
+    objectives: { title: "Objectifs pédagogiques", items: ["Objectif 1", "Objectif 2"] },
+    steps: { title: "Méthode pas à pas", items: ["Étape 1", "Étape 2", "Étape 3"] },
+    callout: { title: "Point de vigilance", body: "Mettez en évidence une règle, un risque ou un conseil.", tone: "warning" },
+    case_study: { title: "Cas pratique", body: "Décrivez une situation professionnelle réaliste.", prompt: "Que feriez-vous dans cette situation ?" },
+    knowledge_check: { title: "Vérification rapide", prompt: "Quelle réponse est correcte ?", options: ["Réponse A", "Réponse B"], correctAnswer: 0, explanation: "Expliquez ici pourquoi cette réponse est correcte." },
+    summary: { title: "À retenir", items: ["Idée clé 1", "Idée clé 2", "Action à réaliser"] },
+  };
+  return { id: crypto.randomUUID(), type, ...templates[type] };
+}
 
 function durationMinutesFromLabel(value: string) {
   const day = value.match(/(\d+(?:[.,]\d+)?)\s*j/i);
@@ -1292,11 +1435,12 @@ function studioResourceIcon(kind: string) {
   if (kind === "scorm") return <Archive size={18} />;
   if (kind === "presentation") return <Table2 size={18} />;
   if (kind === "external") return <Link2 size={18} />;
+  if (kind === "drive") return <LibraryBig size={18} />;
   return <FileText size={18} />;
 }
 
 function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { course: Course; onClose: () => void; catalogSeed?: CatalogCourse; onPublished?: () => void }) {
-  const initialModules = course.moduleContent.length ? course.moduleContent.map((module, index): StudioModule => ({
+  const initialModules: StudioModule[] = course.moduleContent.length ? course.moduleContent.map((module, index): StudioModule => ({
     id: module.id ?? `${course.id}-module-${index + 1}`,
     title: module.title,
     description: module.summary,
@@ -1305,17 +1449,23 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
     objectives: module.points,
     published: true,
     resources: (module.resources ?? []).map((resource) => ({ id: resource.id, name: resource.name, type: resource.type, contentKind: resource.contentKind ?? (resource.type === "link" ? "external" : "document"), url: resource.url, sizeBytes: resource.sizeBytes, metadata: resource.metadata })),
-  })) : [{ id: `${course.id}-module-1`, title: "Introduction et objectifs", description: course.description, contentType: "text", durationMinutes: 15, objectives: [], published: true, resources: [] }];
-  const [tab, setTab] = useState<"structure" | "content" | "evaluation" | "publication">("structure");
+    layout: module.lessonContent?.layout ?? "signature",
+    blocks: module.lessonContent?.blocks ?? studioStarterBlocks(module.title, module.summary, module.points),
+  })) : [{ id: `${course.id}-module-1`, title: "Introduction et objectifs", description: course.description, contentType: "text", durationMinutes: 15, objectives: [], published: true, resources: [], layout: "signature", blocks: studioStarterBlocks("Introduction et objectifs", course.description) }];
+  const [tab, setTab] = useState<"structure" | "content" | "design" | "evaluation" | "publication">("structure");
   const [details, setDetails] = useState({ title: course.title, category: course.category, description: course.description, objective: course.objective, audience: course.audience, durationMinutes: durationMinutesFromLabel(course.duration), mandatory: Boolean(course.mandatory) });
   const [modules, setModules] = useState<StudioModule[]>(initialModules);
   const [activeModuleId, setActiveModuleId] = useState(initialModules[0].id);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkName, setLinkName] = useState("");
   const [linkKind, setLinkKind] = useState("video");
+  const [driveUrl, setDriveUrl] = useState("");
+  const [driveName, setDriveName] = useState("");
   const [loading, setLoading] = useState(() => usesNetlifyIdentity());
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [importingAi, setImportingAi] = useState(false);
+  const [driveConnecting, setDriveConnecting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [published, setPublished] = useState(false);
   const [quizzes, setQuizzes] = useState<Array<{ id: string; title: string; questionCount: number; published: boolean }>>([]);
@@ -1370,6 +1520,8 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
           id: String(module.id), title: String(module.title ?? "Module"), description: String(module.description ?? ""), contentType: String(module.content_type ?? "text"), durationMinutes: Number(module.duration_minutes ?? 0),
           objectives: Array.isArray(module.learning_objectives) ? module.learning_objectives.map(String) : [], published: Boolean(module.published),
           resources: Array.isArray(module.resources) ? (module.resources as Array<Record<string, unknown>>).map((resource) => ({ id: String(resource.id), name: String(resource.name ?? "Ressource"), type: String(resource.resource_type ?? "file"), contentKind: String(resource.content_kind ?? "document"), url: resource.external_url ? String(resource.external_url) : undefined, sizeBytes: Number(resource.size_bytes ?? 0), metadata: resource.metadata && typeof resource.metadata === "object" ? resource.metadata as Record<string, unknown> : undefined })) : [],
+          layout: lessonContentFromValue(module.lesson_content)?.layout ?? "signature",
+          blocks: lessonContentFromValue(module.lesson_content)?.blocks ?? studioStarterBlocks(String(module.title ?? "Module"), String(module.description ?? ""), Array.isArray(module.learning_objectives) ? module.learning_objectives.map(String) : []),
         }));
         if (loadedModules.length) { setModules(loadedModules); setActiveModuleId(loadedModules[0].id); }
         setQuizzes((data.quizzes ?? []).map((quiz) => ({ id: String(quiz.id), title: String(quiz.title ?? "Évaluation"), questionCount: Number(quiz.question_count ?? 0), published: Boolean(quiz.published) })));
@@ -1389,7 +1541,7 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
         await postAction("save-course", { courseId: course.id, ...details });
         const savedModules: StudioModule[] = [];
         for (const [index, module] of modules.entries()) {
-          const data = await postAction("save-module", { courseId: course.id, moduleId: module.id, position: index + 1, title: module.title, description: module.description, contentType: module.contentType, durationMinutes: module.durationMinutes, objectives: module.objectives, published: module.published });
+          const data = await postAction("save-module", { courseId: course.id, moduleId: module.id, position: index + 1, title: module.title, description: module.description, contentType: module.contentType, durationMinutes: module.durationMinutes, objectives: module.objectives, published: module.published, lessonContent: { schemaVersion: "walyah-lms-module-v1", layout: module.layout, blocks: module.blocks } });
           savedModules.push({ ...module, id: String(data.id ?? module.id) });
         }
         setModules(savedModules);
@@ -1402,16 +1554,79 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
 
   const addModule = async () => {
     setFeedback("");
-    const draft: StudioModule = { id: "", title: `Module ${modules.length + 1}`, description: "", contentType: "text", durationMinutes: 15, objectives: [], published: true, resources: [] };
+    const draftTitle = `Module ${modules.length + 1}`;
+    const draft: StudioModule = { id: "", title: draftTitle, description: "", contentType: "text", durationMinutes: 15, objectives: [], published: true, resources: [], layout: "signature", blocks: studioStarterBlocks(draftTitle) };
     try {
       let id = `module-${Date.now()}`;
       if (usesNetlifyIdentity()) {
-        const data = await postAction("save-module", { courseId: course.id, position: modules.length + 1, title: draft.title, description: "", contentType: "text", durationMinutes: 15, objectives: [], published: true });
+        const data = await postAction("save-module", { courseId: course.id, position: modules.length + 1, title: draft.title, description: "", contentType: "text", durationMinutes: 15, objectives: [], published: true, lessonContent: { schemaVersion: "walyah-lms-module-v1", layout: draft.layout, blocks: draft.blocks } });
         id = String(data.id);
       }
       const created = { ...draft, id };
       setModules((current) => [...current, created]); setActiveModuleId(id); setTab("content");
     } catch (error) { setFeedback(error instanceof Error ? error.message : "Création du module impossible"); }
+  };
+
+  const importAiModules = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportingAi(true); setFeedback("");
+    try {
+      const imported = await importAiModuleFile(file);
+      const created: StudioModule[] = [];
+      for (const [index, module] of imported.modules.entries()) {
+        let id = `ai-module-${crypto.randomUUID()}`;
+        let resources: StudioResource[] = module.resources.map((resource) => ({ name: resource.name, type: "link", contentKind: resource.kind, url: resource.url }));
+        if (usesNetlifyIdentity()) {
+          const data = await postAction("import-ai-module", { courseId: course.id, position: modules.length + index + 1, module });
+          id = String(data.moduleId ?? id);
+          resources = Array.isArray(data.resources) ? (data.resources as Array<Record<string, unknown>>).map((resource) => ({ id: String(resource.id), name: String(resource.name), type: "link", contentKind: String(resource.content_kind), url: String(resource.external_url) })) : resources;
+        }
+        created.push({ id, title: module.title, description: module.summary, contentType: module.contentType, durationMinutes: module.durationMinutes, objectives: module.objectives, published: true, resources, layout: module.lessonContent.layout, blocks: module.lessonContent.blocks });
+      }
+      setModules((current) => [...current, ...created]);
+      setActiveModuleId(created[0].id); setTab("design");
+      setFeedback(`${created.length} module${created.length > 1 ? "s" : ""} IA importé${created.length > 1 ? "s" : ""} et enregistré${created.length > 1 ? "s" : ""}.${imported.warnings.length ? ` ${imported.warnings.length} point${imported.warnings.length > 1 ? "s" : ""} à compléter.` : ""}`);
+    } catch (error) { setFeedback(error instanceof Error ? error.message : "Import du module IA impossible"); }
+    finally { setImportingAi(false); }
+  };
+
+  const connectDrive = async () => {
+    if (!activeModule) return;
+    setDriveConnecting(true); setFeedback("");
+    try {
+      const picked = await pickGoogleDriveFile();
+      let resource: StudioResource = { name: picked.name, type: "link", contentKind: "drive", url: picked.url, metadata: { driveFileId: picked.id, mimeType: picked.mimeType } };
+      if (usesNetlifyIdentity()) {
+        const data = await postAction("add-resource-link", { moduleId: activeModule.id, url: picked.url, name: picked.name, contentKind: "drive", metadata: { driveFileId: picked.id, mimeType: picked.mimeType } });
+        const remote = data.resource as Record<string, unknown>;
+        resource = { id: String(remote.id), name: String(remote.name), type: "link", contentKind: "drive", url: String(remote.external_url), metadata: remote.metadata && typeof remote.metadata === "object" ? remote.metadata as Record<string, unknown> : resource.metadata };
+      }
+      updateModule(activeModule.id, { resources: [...activeModule.resources, resource] });
+      setFeedback(`« ${picked.name} » a été relié depuis Google Drive sans transiter par la limite d’import du LMS.`);
+    } catch (error) { setFeedback(error instanceof Error ? error.message : "Connexion Google Drive impossible"); }
+    finally { setDriveConnecting(false); }
+  };
+
+  const addDriveLink = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!activeModule || !driveUrl) return;
+    setDriveConnecting(true); setFeedback("");
+    try {
+      let parsed: URL;
+      try { parsed = new URL(driveUrl); } catch { throw new Error("Le lien Google Drive n’est pas valide."); }
+      if (parsed.protocol !== "https:" || !["drive.google.com", "docs.google.com"].some((domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`))) throw new Error("Utilisez un lien HTTPS provenant de Google Drive ou Google Docs.");
+      let resource: StudioResource = { name: driveName.trim() || "Fichier Google Drive", type: "link", contentKind: "drive", url: parsed.toString() };
+      if (usesNetlifyIdentity()) {
+        const data = await postAction("add-resource-link", { moduleId: activeModule.id, url: parsed.toString(), name: resource.name, contentKind: "drive" });
+        const remote = data.resource as Record<string, unknown>;
+        resource = { id: String(remote.id), name: String(remote.name), type: "link", contentKind: "drive", url: String(remote.external_url) };
+      }
+      updateModule(activeModule.id, { resources: [...activeModule.resources, resource] });
+      setDriveUrl(""); setDriveName(""); setFeedback("Lien Google Drive ajouté au module.");
+    } catch (error) { setFeedback(error instanceof Error ? error.message : "Ajout Google Drive impossible"); }
+    finally { setDriveConnecting(false); }
   };
 
   const addFiles = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1465,7 +1680,7 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
     try {
       let resource: StudioResource = { name: linkName || linkUrl, type: "link", contentKind: linkKind, url: linkUrl };
       if (usesNetlifyIdentity()) {
-        const data = await postAction("add-resource-link", { moduleId: activeModule.id, url: linkUrl, name: linkName || (linkKind === "video" ? "Vidéo du module" : linkKind === "audio" ? "Audio du module" : "Ressource externe"), contentKind: linkKind });
+        const data = await postAction("add-resource-link", { moduleId: activeModule.id, url: linkUrl, name: linkName || (linkKind === "video" ? "Vidéo du module" : linkKind === "audio" ? "Audio du module" : linkKind === "drive" ? "Fichier Google Drive" : "Ressource externe"), contentKind: linkKind });
         const remote = data.resource as Record<string, unknown>;
         resource = { id: String(remote.id), name: String(remote.name), type: "link", contentKind: String(remote.content_kind), url: String(remote.external_url) };
       }
@@ -1494,6 +1709,27 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
   ];
   const canPublish = readiness.every((item) => item.done);
 
+  const updateBlock = (blockId: string, updates: Partial<LessonBlock>) => {
+    if (!activeModule) return;
+    updateModule(activeModule.id, { blocks: activeModule.blocks.map((block) => block.id === blockId ? { ...block, ...updates } : block) });
+  };
+  const addBlock = (type: LessonBlockType) => {
+    if (!activeModule) return;
+    updateModule(activeModule.id, { blocks: [...activeModule.blocks, newStudioBlock(type)] });
+  };
+  const moveBlock = (blockIndex: number, direction: -1 | 1) => {
+    if (!activeModule) return;
+    const nextIndex = blockIndex + direction;
+    if (nextIndex < 0 || nextIndex >= activeModule.blocks.length) return;
+    const blocks = [...activeModule.blocks];
+    [blocks[blockIndex], blocks[nextIndex]] = [blocks[nextIndex], blocks[blockIndex]];
+    updateModule(activeModule.id, { blocks });
+  };
+  const removeBlock = (blockId: string) => {
+    if (!activeModule || activeModule.blocks.length <= 1) { setFeedback("Un module doit conserver au moins un bloc pédagogique."); return; }
+    updateModule(activeModule.id, { blocks: activeModule.blocks.filter((block) => block.id !== blockId) });
+  };
+
   const publishCourse = async () => {
     if (!canPublish) { setFeedback("Complétez les éléments signalés avant de publier."); return; }
     const saved = await persistStudio(); if (!saved) return;
@@ -1511,12 +1747,24 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
         <nav className="studio-tabs" aria-label="Étapes de préparation">
           <button className={tab === "structure" ? "active" : ""} onClick={() => setTab("structure")}><span>1</span>Informations</button>
           <button className={tab === "content" ? "active" : ""} onClick={() => setTab("content")}><span>2</span>Modules & contenus</button>
-          <button className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}><span>3</span>QCM</button>
-          <button className={tab === "publication" ? "active" : ""} onClick={() => setTab("publication")}><span>4</span>Publication</button>
+          <button className={tab === "design" ? "active" : ""} onClick={() => setTab("design")}><span>3</span>Mise en page</button>
+          <button className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}><span>4</span>QCM</button>
+          <button className={tab === "publication" ? "active" : ""} onClick={() => setTab("publication")}><span>5</span>Publication</button>
         </nav>
         {loading ? <section className="studio-loading"><Clock3 size={25} /><strong>Préparation de l’espace de création…</strong><span>Les informations du catalogue sont récupérées automatiquement.</span></section> : <>
           {catalogSeed && <div className="catalog-seed-note"><Sparkles size={18} /><span><strong>Parcours initialisé depuis le catalogue</strong><small>Le titre, le public, l’objectif et le programme restent entièrement modifiables.</small></span></div>}
           {feedback && <p className="content-feedback" role="status">{feedback}</p>}
+          {tab === "content" && <section className="studio-import-hub">
+            <article className="ai-import-card"><span className="studio-hub-icon ai"><Sparkles size={23} /></span><div><span className="eyebrow">Création assistée</span><h3>Importer des modules générés par une IA</h3><p>Utilisez le format Walyah v1 : objectifs, blocs visuels, cas pratique, question flash et ressources sont contrôlés avant l’ajout en base.</p><div className="studio-hub-actions"><label className="primary-button"><UploadCloud size={16} /> {importingAi ? "Import en cours…" : "Importer le JSON IA"}<input type="file" accept="application/json,.json" onChange={importAiModules} disabled={importingAi} /></label><a className="secondary-button" href="/modeles/module-ia-walyah-exemple.json" download><Download size={15} /> Télécharger l’exemple</a></div></div>
+            </article>
+            <article className="drive-import-card"><span className="studio-hub-icon drive"><LibraryBig size={23} /></span><div><span className="eyebrow">Fichiers volumineux</span><h3>Relier Google Drive</h3><p>Le LMS conserve le lien et les droits restent gérés dans Drive : le fichier ne transite pas par la limite d’import Netlify.</p><div className="studio-hub-actions"><button className="secondary-button" type="button" disabled={!googleDriveConfigured() || driveConnecting || !activeModule} onClick={() => void connectDrive()}><Link2 size={15} /> {driveConnecting ? "Connexion…" : "Choisir dans Drive"}</button><small>{googleDriveConfigured() ? "Connexion sécurisée à la demande" : "Sélecteur à activer avec les variables Netlify"}</small></div><form className="drive-link-form" onSubmit={addDriveLink}><input value={driveName} onChange={(event) => setDriveName(event.target.value)} placeholder="Nom visible" /><input type="url" value={driveUrl} onChange={(event) => setDriveUrl(event.target.value)} placeholder="Coller un lien Drive partagé" required /><button className="secondary-button" type="submit" disabled={driveConnecting || !activeModule}><Plus size={15} /> Ajouter</button></form></div>
+            </article>
+          </section>}
+          {tab === "design" && activeModule && <section className="studio-pane studio-design">
+            <header className="studio-design-heading"><div><span className="eyebrow">Canvas pédagogique</span><h3>Composer une expérience claire et vivante</h3><p>Ajoutez, réordonnez et prévisualisez les blocs qui seront affichés à l’apprenant.</p></div><span className="count-badge">{activeModule.blocks.length} bloc{activeModule.blocks.length > 1 ? "s" : ""}</span></header>
+            <div className="layout-choices" role="group" aria-label="Style de mise en page">{([{"id":"signature","title":"Signature","copy":"Éditorial et premium"},{"id":"atelier","title":"Atelier","copy":"Pratique et séquencé"},{"id":"essentiel","title":"Essentiel","copy":"Direct et compact"}] as const).map((layout) => <button key={layout.id} className={activeModule.layout === layout.id ? "active" : ""} onClick={() => updateModule(activeModule.id, { layout: layout.id })}><span className={`layout-miniature layout-${layout.id}`}><i /><i /><i /></span><strong>{layout.title}</strong><small>{layout.copy}</small></button>)}</div>
+            <div className="studio-design-grid"><aside className="block-palette"><span className="form-section-title"><Plus size={16} /> Ajouter un bloc</span>{(["hero", "text", "objectives", "steps", "callout", "case_study", "knowledge_check", "summary"] as LessonBlockType[]).map((type) => <button key={type} onClick={() => addBlock(type)}><span>{type === "knowledge_check" ? <FileQuestion size={16} /> : type === "case_study" ? <ClipboardCheck size={16} /> : type === "callout" ? <CircleHelp size={16} /> : <FileText size={16} />}</span>{studioBlockLabel(type)}<Plus size={14} /></button>)}</aside><div className={`lesson-canvas layout-${activeModule.layout}`}>{activeModule.blocks.map((block, index) => <article className={`design-block block-${block.type} tone-${block.tone ?? "info"}`} key={block.id}><header><span><GripVertical size={15} /><small>{studioBlockLabel(block.type)} · {index + 1}</small></span><div><button className="icon-button" aria-label="Monter le bloc" disabled={index === 0} onClick={() => moveBlock(index, -1)}>↑</button><button className="icon-button" aria-label="Descendre le bloc" disabled={index === activeModule.blocks.length - 1} onClick={() => moveBlock(index, 1)}>↓</button><button className="icon-button danger-icon" aria-label="Supprimer le bloc" onClick={() => removeBlock(block.id)}><Trash2 size={15} /></button></div></header><label>Titre<input value={block.title} onChange={(event) => updateBlock(block.id, { title: event.target.value })} /></label>{["hero", "text", "callout", "case_study"].includes(block.type) && <label>Contenu<textarea rows={3} value={block.body ?? ""} onChange={(event) => updateBlock(block.id, { body: event.target.value })} /></label>}{["objectives", "steps", "summary"].includes(block.type) && <label>Éléments — un par ligne<textarea rows={4} value={(block.items ?? []).join("\n")} onChange={(event) => updateBlock(block.id, { items: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} /></label>}{block.type === "callout" && <label>Ton<select value={block.tone ?? "info"} onChange={(event) => updateBlock(block.id, { tone: event.target.value as LessonBlock["tone"] })}><option value="info">Information</option><option value="success">Bonne pratique</option><option value="warning">Vigilance</option></select></label>}{block.type === "case_study" && <label>Consigne<input value={block.prompt ?? ""} onChange={(event) => updateBlock(block.id, { prompt: event.target.value })} /></label>}{block.type === "knowledge_check" && <><label>Question<textarea rows={2} value={block.prompt ?? ""} onChange={(event) => updateBlock(block.id, { prompt: event.target.value })} /></label><label>Réponses — une par ligne<textarea rows={3} value={(block.options ?? []).join("\n")} onChange={(event) => updateBlock(block.id, { options: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean).slice(0, 6) })} /></label><label>Index de la bonne réponse<input type="number" min="0" max={Math.max(0, (block.options?.length ?? 1) - 1)} value={block.correctAnswer ?? 0} onChange={(event) => updateBlock(block.id, { correctAnswer: Number(event.target.value) })} /></label><label>Explication<textarea rows={2} value={block.explanation ?? ""} onChange={(event) => updateBlock(block.id, { explanation: event.target.value })} /></label></>}</article>)}</div></div>
+          </section>}
           {tab === "structure" && <section className="studio-pane studio-details"><div className="form-grid"><label className="full-field">Titre du parcours<input value={details.title} onChange={(event) => setDetails({ ...details, title: event.target.value })} /></label><label>Catégorie<input value={details.category} onChange={(event) => setDetails({ ...details, category: event.target.value })} /></label><label>Durée totale estimée (minutes)<input type="number" min="0" value={details.durationMinutes} onChange={(event) => setDetails({ ...details, durationMinutes: Number(event.target.value) })} /></label><label className="full-field">Public concerné<input value={details.audience} onChange={(event) => setDetails({ ...details, audience: event.target.value })} /></label><label className="full-field">Objectif pédagogique<textarea rows={3} value={details.objective} onChange={(event) => setDetails({ ...details, objective: event.target.value })} /></label><label className="full-field">Présentation du parcours<textarea rows={4} value={details.description} onChange={(event) => setDetails({ ...details, description: event.target.value })} /></label><label className="check-field full-field"><input type="checkbox" checked={details.mandatory} onChange={(event) => setDetails({ ...details, mandatory: event.target.checked })} /><span><strong>Formation obligatoire</strong><small>Les échéances pourront être définies lors de l’affectation.</small></span></label></div>{catalogSeed?.program?.length ? <div className="catalog-program"><span className="form-section-title">Programme suggéré par le catalogue</span><ol>{catalogSeed.program.map((item) => <li key={item}>{item}</li>)}</ol></div> : null}</section>}
           {tab === "content" && <section className="studio-pane studio-content-grid"><aside className="studio-module-list"><header><div><span className="eyebrow">Structure</span><strong>{modules.length} module{modules.length > 1 ? "s" : ""}</strong></div><button className="icon-button" aria-label="Ajouter un module" onClick={addModule}><Plus size={18} /></button></header>{modules.map((module, index) => <button key={module.id} className={module.id === activeModule?.id ? "active" : ""} onClick={() => setActiveModuleId(module.id)}><GripVertical size={15} /><span><small>Module {index + 1}</small><strong>{module.title}</strong></span><ChevronRight size={15} /></button>)}<button className="secondary-button add-module-button" onClick={addModule}><Plus size={16} /> Ajouter un module</button></aside>{activeModule && <div className="studio-module-editor"><div className="module-fields form-grid"><label className="full-field">Titre du module<input value={activeModule.title} onChange={(event) => updateModule(activeModule.id, { title: event.target.value })} /></label><label>Type de module<select value={activeModule.contentType} onChange={(event) => updateModule(activeModule.id, { contentType: event.target.value })}><option value="text">Cours / texte</option><option value="video">Vidéo</option><option value="document">Document</option><option value="audio">Audio / podcast</option><option value="scorm">Package SCORM</option><option value="quiz">Évaluation</option></select></label><label>Durée (minutes)<input type="number" min="0" value={activeModule.durationMinutes} onChange={(event) => updateModule(activeModule.id, { durationMinutes: Number(event.target.value) })} /></label><label className="full-field">Résumé ou contenu textuel<textarea rows={4} value={activeModule.description} onChange={(event) => updateModule(activeModule.id, { description: event.target.value })} placeholder="Notions abordées, consignes, mise en situation…" /></label><label className="full-field">Objectifs du module — un par ligne<textarea rows={3} value={activeModule.objectives.join("\n")} onChange={(event) => updateModule(activeModule.id, { objectives: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} /></label></div><section><span className="form-section-title"><UploadCloud size={17} /> Déposer des fichiers</span><label className="upload-zone studio-upload"><UploadCloud size={29} /><strong>{uploading ? "Import et contrôle en cours…" : "Sélectionnez un ou plusieurs contenus"}</strong><small>PDF, Word, PowerPoint, MP4/WebM, MP3/WAV/M4A/OGG ou SCORM 1.2/2004 (.zip) · 50 Mo par fichier</small><input type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.webm,.mp3,.wav,.m4a,.ogg,.aac,.zip,video/*,audio/*" onChange={addFiles} disabled={uploading} /></label><p className="scorm-note"><Archive size={15} /> Les archives SCORM sont contrôlées : présence du manifeste, version et intégrité du ZIP.</p></section><section><span className="form-section-title"><Link2 size={17} /> Ajouter un lien</span><form className="studio-link-form" onSubmit={addLink}><select value={linkKind} onChange={(event) => setLinkKind(event.target.value)}><option value="video">Vidéo</option><option value="audio">Audio</option><option value="external">Fichier ou page web</option></select><input value={linkName} onChange={(event) => setLinkName(event.target.value)} placeholder="Nom visible (facultatif)" /><input type="url" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://…" required /><button className="secondary-button" type="submit"><Plus size={15} /> Ajouter</button></form></section><section><span className="form-section-title"><LibraryBig size={17} /> Ressources du module</span>{activeModule.resources.length ? <div className="managed-resources studio-resources">{activeModule.resources.map((resource, index) => <div key={resource.id ?? `${resource.name}-${index}`}><span className={`resource-icon ${resource.contentKind}`}>{studioResourceIcon(resource.contentKind)}</span><span><strong>{resource.name}</strong><small>{resource.contentKind === "scorm" ? String(resource.metadata?.version ?? "Package SCORM") : resource.contentKind}{resource.sizeBytes ? ` · ${(resource.sizeBytes / 1024 / 1024).toFixed(1)} Mo` : " · lien sécurisé"}</small></span>{resource.url && <a className="icon-button" href={resource.url} target="_blank" rel="noreferrer" aria-label="Ouvrir"><ExternalLink size={16} /></a>}<button className="icon-button" onClick={() => void removeResource(resource)} aria-label="Supprimer"><Trash2 size={16} /></button></div>)}</div> : <div className="studio-inline-empty"><Inbox size={20} /><span>Aucune ressource ajoutée à ce module.</span></div>}</section></div>}</section>}
           {tab === "evaluation" && <section className="studio-pane evaluation-studio"><div className="evaluation-intro"><span className="quiz-card-icon tone-violet"><FileQuestion size={26} /></span><div><span className="eyebrow">Évaluation des acquis</span><h3>Créer ou importer un questionnaire</h3><p>Choix unique, choix multiples, vrai/faux et réponse courte. Les fichiers JSON et Excel sont contrôlés puis enregistrés dans la base.</p></div><button className="primary-button" onClick={() => { setEditingQuizId(""); setQuizOpen(true); }}><Plus size={16} /> Créer ou importer</button></div><div className="evaluation-import-cards"><a href="/modeles/qcm-walyah-modele.xlsx" download><Table2 size={22} /><span><strong>Modèle Excel</strong><small>Colonnes prêtes et exemples inclus</small></span><Download size={16} /></a><a href="/modeles/qcm-walyah-exemple.json" download><FileText size={22} /><span><strong>Modèle JSON</strong><small>Structure technique complète</small></span><Download size={16} /></a></div>{quizzes.length ? <div className="studio-quiz-list">{quizzes.map((quiz) => <article key={quiz.id}><FileQuestion size={19} /><span><strong>{quiz.title}</strong><small>{quiz.questionCount} question{quiz.questionCount > 1 ? "s" : ""}</small></span><span className={`status-tag ${quiz.published ? "status-actif" : "status-draft"}`}>{quiz.published ? "Publié" : "Brouillon"}</span><span className="studio-quiz-actions"><button className="secondary-button compact-action" disabled={saving} onClick={() => void toggleQuizPublication(quiz)}>{quiz.published ? "Dépublier" : "Publier"}</button><button className="icon-button" aria-label={`Modifier ${quiz.title}`} onClick={() => { setEditingQuizId(quiz.id); setQuizOpen(true); }}><Edit3 size={15} /></button><button className="icon-button" aria-label={`Affecter ${quiz.title}`} onClick={() => setQuizToAssign({ id: quiz.id, title: quiz.title, courseId: course.id, courseTitle: details.title, questionCount: quiz.questionCount, threshold: 80, published: quiz.published, participants: 0, averageScore: 0, assignedUsers: 0, assignedGroups: 0 })}><Send size={15} /></button><button className="icon-button danger-icon" aria-label={`Supprimer ${quiz.title}`} onClick={() => void removeQuiz(quiz)}><Trash2 size={15} /></button></span></article>)}</div> : <div className="studio-inline-empty"><FileQuestion size={21} /><span>Aucun questionnaire n’est encore relié à ce parcours.</span></div>}<div className="import-rules-summary"><strong>Règles principales d’import</strong><ul><li>100 questions maximum par questionnaire.</li><li>2 à 6 propositions pour les choix uniques ou multiples.</li><li>Bonnes réponses Excel indiquées par lettres : A ou A|C.</li><li>Plusieurs QCM peuvent être publiés et ciblés sur des groupes différents.</li><li>Une erreur précise la ligne concernée sans bloquer les lignes valides.</li></ul></div></section>}
@@ -1834,6 +2082,7 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
   const [selectedLearner, setSelectedLearner] = useState<Learner | null>(null);
   const [quizMode, setQuizMode] = useState(false);
   const [focusedCourseId, setFocusedCourseId] = useState("");
+  const [focusedCatalogCode, setFocusedCatalogCode] = useState("");
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
 
   useEffect(() => {
@@ -1905,6 +2154,21 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
     setView("activity");
   }, []);
 
+  const openSearchResult = useCallback((result: GlobalSearchResult) => {
+    setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false);
+    if (result.kind === "navigation" && result.view) { setView(result.view); return; }
+    if (result.kind === "learner" && result.learner) { setSelectedLearner(result.learner); return; }
+    if (result.kind === "catalog" && result.code) { setFocusedCatalogCode(result.code); setView("catalog"); return; }
+    if (result.kind === "course" && result.entityId) {
+      if (session?.role === "learner") {
+        const assigned = learnerWorkspace.courses.find((course) => course.id === result.entityId || course.code === result.code);
+        if (assigned) { setSelectedCourse(assigned); setView("catalogue"); }
+        return;
+      }
+      setFocusedCourseId(result.entityId); setView("trainings");
+    }
+  }, [learnerWorkspace.courses, session?.role]);
+
   const content = useMemo(() => {
     if (!session) return null;
     if (selectedLearner) return <LearnerProfileView learner={selectedLearner} onBack={() => setSelectedLearner(null)} />;
@@ -1915,7 +2179,7 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
     switch (view) {
       case "dashboard": return session.role === "super_admin" ? <SuperAdminDashboard onView={setView} onActivity={openAdminActivity} /> : session.role === "admin" ? <AdminDashboard onView={setView} onActivity={openAdminActivity} /> : <LearnerDashboard name={session.name} workspace={learnerWorkspace} onView={setView} onCourse={setSelectedCourse} />;
       case "catalogue": return <CatalogueView assignedCourses={learnerWorkspace.courses} loading={learnerWorkspace.loading} onCourse={setSelectedCourse} />;
-      case "catalog": return <FullCatalogueView onCourse={setSelectedCourse} />;
+      case "catalog": return <FullCatalogueView onCourse={setSelectedCourse} focusCode={focusedCatalogCode || undefined} onFocusHandled={() => setFocusedCatalogCode("")} />;
       case "certificates": return <CertificatesView session={session} profile={learnerWorkspace.profile} certificates={learnerWorkspace.certificates} loading={learnerWorkspace.loading} />;
       case "users": return <UsersView onLearner={setSelectedLearner} />;
       case "trainings": return <TrainingsView focusCourseId={focusedCourseId || undefined} onFocusHandled={() => setFocusedCourseId("")} onView={setView} />;
@@ -1924,7 +2188,7 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
       case "settings": return <SettingsView session={session} profile={learnerWorkspace.profile} onAvatarUpdated={(avatarUrl) => setLearnerWorkspace((current) => ({ ...current, profile: current.profile ? { ...current.profile, avatarUrl } : { fullName: session.name, email: session.email, matricule: "", department: "", jobTitle: "", location: "", avatarUrl } }))} />;
       default: return null;
     }
-  }, [focusedCourseId, learnerWorkspace, openAdminActivity, quizMode, selectedCourse, selectedLearner, session, view]);
+  }, [focusedCatalogCode, focusedCourseId, learnerWorkspace, openAdminActivity, quizMode, selectedCourse, selectedLearner, session, view]);
 
   const logoutSession = async () => {
     if (session?.authProvider === "netlify" && usesNetlifyIdentity()) {
@@ -1942,5 +2206,5 @@ export default function LmsApp({ initialSession = null }: { initialSession?: Ses
 
   if (passwordReset) return <PasswordResetScreen onComplete={(message) => { setPasswordReset(false); setAuthNotice(message); }} onCancel={() => { void import("@netlify/identity").then((identity) => identity.logout()).catch(() => undefined); setPasswordReset(false); setAuthNotice("Réinitialisation annulée. Vous pouvez demander un nouveau lien depuis la page de connexion."); }} />;
   if (!session) return <AuthScreen key={authNotice || "auth"} onAuthenticated={authenticateSession} initialMessage={authNotice} />;
-  return <div className="app-shell"><Sidebar role={session.role} view={view} onView={(next) => { setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setView(next); }} open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="app-main"><Topbar session={session} avatarUrl={session.role === "learner" ? learnerWorkspace.profile?.avatarUrl : undefined} onMenu={() => setSidebarOpen(true)} onLogout={logoutSession} /><main className="page-content">{content}</main></div></div>;
+  return <div className="app-shell"><Sidebar role={session.role} view={view} onView={(next) => { setSelectedCourse(null); setSelectedLearner(null); setQuizMode(false); setView(next); }} open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="app-main"><Topbar session={session} avatarUrl={session.role === "learner" ? learnerWorkspace.profile?.avatarUrl : undefined} assignedCourses={learnerWorkspace.courses} onSearchResult={openSearchResult} onMenu={() => setSidebarOpen(true)} onLogout={logoutSession} /><main className="page-content">{content}</main></div></div>;
 }

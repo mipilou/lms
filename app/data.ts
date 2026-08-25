@@ -3,6 +3,27 @@ import catalogueData from "./catalogues.json";
 export type CourseStatus = "En cours" | "Terminée" | "À commencer";
 export type Accent = "teal" | "blue" | "violet" | "amber" | "coral";
 
+export type LessonBlockType = "hero" | "text" | "objectives" | "steps" | "callout" | "case_study" | "knowledge_check" | "summary";
+
+export type LessonBlock = {
+  id: string;
+  type: LessonBlockType;
+  title: string;
+  body?: string;
+  items?: string[];
+  tone?: "info" | "success" | "warning";
+  prompt?: string;
+  options?: string[];
+  correctAnswer?: number;
+  explanation?: string;
+};
+
+export type LessonContent = {
+  schemaVersion: "walyah-lms-module-v1";
+  layout: "signature" | "atelier" | "essentiel";
+  blocks: LessonBlock[];
+};
+
 export type ModuleContent = {
   id?: string;
   title: string;
@@ -11,6 +32,7 @@ export type ModuleContent = {
   summary: string;
   points: string[];
   videoUrl?: string;
+  lessonContent?: LessonContent;
   resources?: Array<{ id?: string; name: string; type: string; contentKind?: string; url?: string; sizeBytes?: number; metadata?: Record<string, unknown> }>;
 };
 

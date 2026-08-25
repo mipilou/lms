@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "walyah-lms-module-v1",
+  "modules": [
+    {
+      "title": "Les bons réflexes face à un message suspect",
+      "summary": "Un module court et opérationnel pour analyser un e-mail avant d’agir.",
+      "durationMinutes": 25,
+      "objectives": [
+        "Repérer les principaux signaux d’alerte",
+        "Vérifier un lien sans l’ouvrir",
+        "Signaler rapidement une tentative de fraude"
+      ],
+      "contentType": "text",
+      "layout": "signature",
+      "blocks": [
+        {
+          "type": "hero",
+          "title": "Un doute vaut mieux qu’un clic",
+          "body": "En quelques minutes, apprenez à ralentir, vérifier et signaler avant qu’un message frauduleux ne devienne un incident."
+        },
+        {
+          "type": "objectives",
+          "title": "À la fin de ce module, vous saurez",
+          "items": [
+            "Identifier une demande inhabituelle",
+            "Contrôler l’expéditeur et le domaine",
+            "Appliquer la procédure de signalement"
+          ]
+        },
+        {
+          "type": "text",
+          "title": "Les quatre contrôles essentiels",
+          "body": "Avant toute action, vérifiez l’expéditeur, le niveau d’urgence, la destination réelle du lien et la nature de la pièce jointe. Une formulation crédible ne garantit jamais l’authenticité du message."
+        },
+        {
+          "type": "steps",
+          "title": "La méthode STOP",
+          "items": [
+            "Stopper l’action demandée",
+            "Tester l’identité de l’expéditeur par un autre canal",
+            "Observer le lien et la pièce jointe sans les ouvrir",
+            "Prévenir le support selon la procédure interne"
+          ]
+        },
+        {
+          "type": "callout",
+          "title": "Point de vigilance",
+          "body": "Ne transférez pas un message suspect à d’autres collègues : utilisez le canal de signalement prévu par l’organisation.",
+          "tone": "warning"
+        },
+        {
+          "type": "case_study",
+          "title": "Une facture urgente reçue à 17 h 45",
+          "body": "Un fournisseur connu demande un changement de coordonnées bancaires avant la fermeture du service. L’adresse ressemble à l’adresse habituelle, mais une lettre diffère dans le domaine.",
+          "prompt": "Quelles vérifications réalisez-vous avant de répondre ?"
+        },
+        {
+          "type": "knowledge_check",
+          "title": "Vérification rapide",
+          "prompt": "Quelle est la première action face à une demande urgente inhabituelle ?",
+          "options": [
+            "Répondre pour demander plus de détails",
+            "Vérifier l’identité par un canal connu",
+            "Transférer le message à toute l’équipe"
+          ],
+          "correctAnswer": 1,
+          "explanation": "Un canal déjà connu permet de confirmer l’identité sans utiliser les coordonnées potentiellement frauduleuses du message."
+        },
+        {
+          "type": "summary",
+          "title": "À retenir",
+          "items": [
+            "L’urgence est un signal d’alerte, pas une preuve",
+            "Un seul caractère peut révéler un faux domaine",
+            "En cas de doute, vérifiez puis signalez"
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "name": "Fiche réflexe cybersécurité",
+          "url": "https://drive.google.com/file/d/EXEMPLE/view",
+          "kind": "drive"
+        }
+      ]
+    }
+  ]
+}
