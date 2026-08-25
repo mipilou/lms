@@ -7,7 +7,8 @@ La base est relationnelle et sépare l’identité, le contenu, le suivi pédago
 | Identité | `users`, `role_audit_events` | profils, matricules, rôles et changements sensibles |
 | Catalogue | `courses`, `modules`, `resources` | 144 références 2026, parcours publiés, vidéos et fichiers |
 | Suivi | `enrollments`, `module_progress` | assignations, échéances et progression détaillée |
-| Évaluation | `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates` | QCM, scores, réussite et attestations |
+| Évaluation | `quizzes`, `quiz_questions`, `quiz_attempts`, `quiz_assignments`, `certificates` | QCM, affectations ciblées, scores, réussite et attestations |
+| Groupes | `training_groups`, `training_group_members` | Cohortes de formation par service ou multi-services |
 | Pilotage | `login_events`, `activity_events` | connexions et chronologie métier |
 | Besoins | `training_requests` | demandes initiées par LMS, passeport ou import |
 | Passeport | `passport_employees`, `passport_connections`, `integration_events` | annuaire RH en attente, rapprochement des comptes et file d’événements bidirectionnelle |

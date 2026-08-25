@@ -1039,6 +1039,60 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .quiz-helper { margin: 10px 0 0; color: #7a8890; font-size: 9px; }
 .quiz-admin-card > button { width: 100%; margin-top: 14px; }
 
+/* Répertoire par service et groupes de formation */
+.service-directory { display: grid; gap: 14px; }
+.service-directory > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.service-directory h2, .learner-service-section h2, .training-group-workspace h3 { margin: 4px 0 0; color: var(--navy); font-size: 16px; }
+.service-filter-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.service-filter-cards > button { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfc; color: #77868e; text-align: left; }
+.service-filter-cards > button:hover, .service-filter-cards > button.active { border-color: rgba(195,31,50,.35); background: #fff3f4; color: var(--teal); box-shadow: 0 6px 18px rgba(35,57,67,.06); }
+.service-filter-cards span, .service-filter-cards strong, .service-filter-cards small { display: block; min-width: 0; }
+.service-filter-cards strong { overflow: hidden; color: #415660; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.service-filter-cards small { margin-top: 3px; color: #8a969d; font-size: 8px; }
+.learner-service-sections { display: grid; gap: 14px; }
+.learner-service-section { padding: 0; overflow: hidden; }
+.learner-service-section > header { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 15px 17px; border-bottom: 1px solid var(--line); background: linear-gradient(90deg, #fff7f8, #fff); }
+.service-section-icon, .group-emblem { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: #fbe8ea; color: var(--teal); }
+.service-empty { min-height: 180px; }
+.training-group-workspace { display: grid; grid-template-columns: minmax(280px, .82fr) minmax(360px, 1.18fr); min-height: 590px; }
+.training-group-list { padding: 20px; border-right: 1px solid var(--line); background: #f8faf9; }
+.training-group-list > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }
+.training-group-list > article { display: grid; grid-template-columns: 38px minmax(0, 1fr) 32px 32px; align-items: center; gap: 8px; margin-bottom: 7px; padding: 11px; border: 1px solid var(--line); border-radius: 11px; background: white; }
+.training-group-list > article.active { border-color: rgba(195,31,50,.38); box-shadow: 0 0 0 3px rgba(195,31,50,.07); }
+.training-group-list article strong, .training-group-list article small { display: block; }
+.training-group-list article strong { color: #405560; font-size: 10px; }
+.training-group-list article small { margin-top: 3px; color: #87939a; font-size: 8px; }
+.danger-icon { color: #b84f5c !important; }
+.training-group-editor { display: grid; align-content: start; gap: 13px; padding: 22px; }
+.training-group-editor > div:first-child p { margin: 7px 0 0; color: #7a8890; font-size: 9px; line-height: 1.5; }
+.group-member-picker { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfc; }
+.group-member-picker > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: white; }
+.group-member-picker header strong, .group-member-picker header small { display: block; }
+.group-member-picker header strong { color: #405560; font-size: 9px; }
+.group-member-picker header small { margin-top: 3px; color: #89959c; font-size: 8px; }
+.group-member-picker header select { width: 175px; height: 34px; padding: 0 8px; font-size: 8px; }
+.group-member-picker > div { max-height: 245px; overflow-y: auto; padding: 7px; }
+.group-member-picker > div > label { display: grid; grid-template-columns: 17px 34px minmax(0, 1fr); align-items: center; gap: 8px; margin-bottom: 4px; padding: 8px; border: 1px solid transparent; border-radius: 9px; color: #6f7d85; cursor: pointer; }
+.group-member-picker > div > label:hover, .group-member-picker > div > label.selected { border-color: #e8c8cd; background: #fff3f4; }
+.group-member-picker label input { width: 15px; height: 15px; accent-color: var(--teal); }
+.group-member-picker label strong, .group-member-picker label small { display: block; }
+.group-member-picker label strong { color: #405560; font-size: 9px; }
+.group-member-picker label small { margin-top: 3px; color: #89959c; font-size: 8px; }
+
+/* Gestion complète des QCM */
+.quiz-admin-card > .eyebrow { display: block; margin-top: 13px; padding-right: 72px; }
+.quiz-admin-card h2 { margin-top: 6px; }
+.quiz-stats { grid-template-columns: repeat(3, 1fr); }
+.quiz-card-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.quiz-card-actions .primary-button, .quiz-card-actions .secondary-button { flex: 1 1 105px; height: 36px; padding-inline: 10px; }
+.quiz-assignment-summary { display: flex; align-items: center; gap: 5px; margin-top: 10px; color: #7c8990; font-size: 8px; }
+.quiz-assignment-form { padding: 20px 22px 24px; }
+.assignment-target-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 5px; border-radius: 11px; background: #f1f4f4; }
+.assignment-target-tabs button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 39px; border: 0; border-radius: 8px; background: transparent; color: #75838b; font-size: 9px; font-weight: 800; }
+.assignment-target-tabs button.active { background: white; color: var(--teal); box-shadow: 0 4px 14px rgba(43,61,69,.08); }
+.studio-quiz-actions { display: flex; align-items: center; gap: 6px; }
+.studio-quiz-list article { grid-template-columns: 25px minmax(0, 1fr) auto auto; }
+
 @media (max-width: 1180px) {
   .topbar-brand { display: none; }
   .bi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1048,6 +1102,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .admin-catalogue-toolbar > span { grid-column: 1 / -1; }
   .learner-profile-metrics { grid-template-columns: repeat(2, 1fr); }
   .governance-grid { grid-template-columns: 1fr; }
+  .service-filter-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .training-group-workspace { grid-template-columns: minmax(250px, .8fr) minmax(330px, 1.2fr); }
 }
 
 @media (max-width: 720px) {
@@ -1116,6 +1172,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .employee-error { grid-column: 1 / -1; }
   .directory-footer { align-items: stretch; flex-direction: column; }
   .directory-footer .secondary-button { width: 100%; }
+  .service-directory > header { align-items: flex-start; flex-direction: column; }
+  .service-filter-cards { grid-auto-columns: minmax(210px, 80vw); grid-template-columns: none; overflow-x: auto; padding-bottom: 5px; }
+  .learner-service-section > header { grid-template-columns: 38px minmax(0, 1fr); }
+  .learner-service-section > header .count-badge { grid-column: 2; justify-self: start; }
+  .training-group-workspace { grid-template-columns: 1fr; }
+  .training-group-list { border-right: 0; border-bottom: 1px solid var(--line); }
+  .training-group-editor { padding: 16px 12px; }
+  .group-member-picker > header { align-items: stretch; flex-direction: column; }
+  .group-member-picker header select { width: 100%; }
+  .quiz-card-actions .primary-button, .quiz-card-actions .secondary-button { flex-basis: calc(50% - 7px); }
+  .assignment-target-tabs { grid-template-columns: 1fr; }
   .modal-card.modal-studio { max-height: calc(100vh - 12px); }
   .course-studio { min-height: 0; }
   .studio-tabs { top: 81px; grid-template-columns: repeat(4, minmax(145px, 1fr)); overflow-x: auto; padding: 0 10px; }
@@ -1132,7 +1199,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .evaluation-intro .primary-button { grid-column: 1 / -1; width: 100%; }
   .evaluation-import-cards { grid-template-columns: 1fr; }
   .studio-quiz-list article { grid-template-columns: 25px minmax(0, 1fr) auto; }
-  .studio-quiz-list article > button { grid-column: 2 / -1; width: 100%; }
+  .studio-quiz-actions { grid-column: 2 / -1; flex-wrap: wrap; }
   .publication-actions, .studio-footer { align-items: stretch; flex-direction: column; }
   .publication-actions button, .studio-footer button { flex: 1; }
   .studio-footer > div { width: 100%; }

@@ -57,5 +57,5 @@ test("publishes QCMs and serves their real questions to assigned learners", asyn
   assert.match(api, /set-quiz-published/);
   assert.match(api, /JOIN enrollments e ON e\.course_id = q\.course_id/);
   assert.match(app, /scope=quiz&quizId=/);
-  assert.match(app, /Dépublier le QCM/);
+  assert.match(app, /Dépublier/);
 });

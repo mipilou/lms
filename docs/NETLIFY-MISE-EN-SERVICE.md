@@ -33,6 +33,7 @@ Dans **Data & Storage → Database**, créez la base du projet si Netlify ne l�
 - `20260820000300_seed_2026_catalogues.sql` importe les 144 formations ;
 - `20260822000100_remove_automatic_enrollments.sql` supprime les anciennes affectations automatiques et trace la source des nouvelles affectations ;
 - `20260822000200_content_studio_scorm_quizzes.sql` ajoute le studio de contenus, les métadonnées SCORM et les QCM enrichis ;
+- `20260825000100_quiz_assignments_training_groups.sql` ajoute le cycle complet des QCM, leurs affectations ciblées et les groupes de formation ;
 - `20260822000300_passport_employee_directory.sql` crée l’annuaire RH synchronisé et son cycle de création d’accès.
 
 Netlify détecte ce dossier et applique les migrations juste avant la publication. Si une migration échoue, le déploiement n’est pas publié : corrigez la migration, créez-en une nouvelle et relancez le déploiement. Ne modifiez pas une migration déjà appliquée en production.
@@ -117,7 +118,7 @@ Vérifiez en priorité :
 - `package.json` et `package-lock.json` sont tous deux présents ;
 - la version de Node respecte `package.json` (`>=22.13.0`) ;
 - aucun secret n’est importé côté navigateur ;
-- les six migrations portent des noms uniques et ordonnés ;
+- les sept migrations portent des noms uniques et ordonnés ;
 - `NEXT_PUBLIC_SITE_URL` contient une URL HTTPS valide.
 
 ## Documentation officielle utile

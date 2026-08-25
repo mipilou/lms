@@ -8,6 +8,8 @@ Application de gestion de la formation conçue pour Walyah Académie : authentif
 - rôles serveur `learner`, `admin` et `super_admin` ;
 - création de chaque compte apprenant sans formation, certificat, score ni progression préchargés ;
 - annuaire RH synchronisé depuis le Passeport, avec recherche et création contrôlée des accès apprenants ;
+- répertoire des apprenants organisé en rubriques par service, avec recherche et suivi individuel ;
+- groupes de formation multi-apprenants, mono-service ou transverses, modifiables et réutilisables pour les affectations ;
 - auto-inscription publique désactivée dans l’interface au profit du processus RH → administrateur → apprenant ;
 - affectation progressive des parcours uniquement par un administrateur, un super-administrateur ou le Passeport ;
 - fiche complète de chaque apprenant accessible depuis le tableau de suivi ;
@@ -20,7 +22,7 @@ Application de gestion de la formation conçue pour Walyah Académie : authentif
 - studio guidé de préparation depuis le catalogue, modules réordonnables, liens vidéo/audio/web et dépôt segmenté compatible Netlify de PDF/DOCX/PPTX/MP4/WebM/audio/SCORM ;
 - stockage relationnel dans Netlify Database et fichiers dans Netlify Blobs ;
 - API HMAC bidirectionnelle pour le Passeport de formation ;
-- éditeur de questions à choix unique, choix multiples, vrai/faux et réponse courte, avec publication contrôlée et imports QCM JSON et Excel documentés dans `docs/FORMAT-QCM.md` ;
+- éditeur de questions à choix unique, choix multiples, vrai/faux et réponse courte, avec import JSON/Excel confirmé par la base, modification, suppression tracée, publication et affectation à un apprenant ou à un groupe ;
 - certificat nominatif automatique après validation complète des modules et évaluations, avec logo Walyah, numéro unique et impression/enregistrement PDF ;
 - interface responsive, recherche, filtres, exports CSV et journal d’activité.
 
@@ -49,7 +51,7 @@ Les migrations SQL placées dans `netlify/database/migrations/` sont appliquées
 
 ## Architecture des données
 
-Les principales tables sont `users`, `passport_employees`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates`, `login_events`, `activity_events`, `training_requests`, `passport_connections`, `integration_events` et `role_audit_events`.
+Les principales tables sont `users`, `passport_employees`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `quiz_assignments`, `training_groups`, `training_group_members`, `certificates`, `login_events`, `activity_events`, `training_requests`, `passport_connections`, `integration_events` et `role_audit_events`.
 
 Les fichiers pédagogiques sont conservés dans le store Netlify Blobs `walyah-lms-content` et les photos de profil dans `walyah-lms-avatars`; la base conserve uniquement les métadonnées et les liens métier.
 

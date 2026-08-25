@@ -5,11 +5,11 @@ Le studio accepte deux formats :
 - `public/modeles/qcm-walyah-modele.xlsx` pour une préparation simple dans Excel ;
 - `public/modeles/qcm-walyah-exemple.json` pour un échange avec un outil informatique.
 
-Chaque import est contrôlé avant l’enregistrement. L’interface indique la ligne et la règle concernées lorsqu’une donnée est invalide. Les lignes valides restent disponibles dans l’aperçu.
+Chaque import est contrôlé avant l’enregistrement. L’interface indique la ligne et la règle concernées lorsqu’une donnée est invalide. Les lignes valides restent disponibles dans l’aperçu. Après vérification, cliquez sur **Enregistrer dans la base** : le QCM n’apparaît dans la bibliothèque qu’après la confirmation de persistance renvoyée par le serveur.
 
 ## Modèle Excel
 
-La feuille à importer doit s’appeler `Questions` ou être la première feuille du classeur. La première ligne contient les en-têtes suivants :
+La feuille à importer doit s’appeler `Questions` ou être la première feuille du classeur. Une ligne d’en-têtes doit contenir les colonnes suivantes ; elle peut être précédée d’un titre ou d’instructions :
 
 | Colonne | Obligatoire | Règle |
 |---|---:|---|
@@ -57,6 +57,14 @@ Le JSON accepte la structure suivante :
 - les index de `correctAnswers` commencent à `0` ;
 - `acceptedAnswers` est utilisé uniquement pour `short_text` ;
 - l’ancien champ JSON `correct` reste accepté pour les questionnaires à choix unique.
+
+## Après l’import
+
+- le QCM est d’abord enregistré comme brouillon dans `quizzes` et ses questions dans `quiz_questions` au cours d’une même opération ;
+- il peut être rouvert et modifié depuis **QCM & évaluations** ;
+- sa suppression le retire de la bibliothèque active tout en conservant les résultats déjà produits pour l’audit ;
+- le bouton **Affecter** permet de choisir un apprenant ou un groupe de formation ;
+- l’affectation publie le QCM et ajoute automatiquement la formation associée dans l’espace des personnes concernées.
 
 ## Formats de fichiers pédagogiques
 

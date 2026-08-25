@@ -72,6 +72,28 @@ type AdminAccount = { id: string; name: string; email: string; role: Role; statu
 type RoleAudit = { id: string; actorName: string; targetName: string; previousRole: Role | null; newRole: Role; occurredAt: string };
 type DepartmentInsight = { department: string; learners: number; activeLearners: number; averageProgress: number; completed: number };
 type CourseInsight = { id: string; code: string; title: string; enrolled: number; completion: number };
+type TrainingGroup = {
+  id: string;
+  name: string;
+  description: string;
+  department: string;
+  memberCount: number;
+  assignedQuizzes: number;
+  memberIds: string[];
+};
+type QuizAdminRecord = {
+  id: string;
+  title: string;
+  courseId: string;
+  courseTitle: string;
+  questionCount: number;
+  threshold: number;
+  published: boolean;
+  participants: number;
+  averageScore: number;
+  assignedUsers: number;
+  assignedGroups: number;
+};
 type AdminSnapshot = {
   learners: number;
   publishedCourses: number;
@@ -907,8 +929,11 @@ function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tous");
+  const [service, setService] = useState("Tous les services");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [invited, setInvited] = useState<string[]>([]);
+  const [notice, setNotice] = useState("");
   useEffect(() => {
     if (!usesNetlifyIdentity()) return;
     void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { learners?: Array<Record<string, unknown>> }) => {
@@ -928,20 +953,96 @@ function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
       }));
     }).catch(() => setLoadError("Les apprenants n’ont pas pu être chargés. Réessayez après avoir vérifié la base Netlify.")).finally(() => setLoading(false));
   }, []);
-  const filtered = items.filter((learner) => (status === "Tous" || learner.status === status) && `${learner.name} ${learner.matricule} ${learner.email} ${learner.department}`.toLowerCase().includes(query.toLowerCase()));
+  const services = Array.from(new Set(items.map((learner) => learner.department || "Non renseigné"))).sort((left, right) => left.localeCompare(right, "fr"));
+  const filtered = items.filter((learner) => (status === "Tous" || learner.status === status) && (service === "Tous les services" || learner.department === service) && `${learner.name} ${learner.matricule} ${learner.email} ${learner.department}`.toLowerCase().includes(query.toLowerCase()));
+  const serviceGroups = Array.from(new Set(filtered.map((learner) => learner.department || "Non renseigné"))).sort((left, right) => left.localeCompare(right, "fr")).map((department) => ({ department, learners: filtered.filter((learner) => (learner.department || "Non renseigné") === department) }));
   const exportCsv = () => {
     const rows = [["Nom", "Email", "Service", "Progression", "Formations terminées", "Dernière connexion", "Statut"], ...filtered.map((item) => [item.name, item.email, item.department, `${item.progress}%`, `${item.completed}/${item.assigned}`, `${item.lastLogin} ${item.lastLoginDetail}`, item.status])];
     const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = "suivi-apprenants-walyah.csv"; link.click(); URL.revokeObjectURL(url);
   };
+  const renderLearnerRow = (learner: Learner) => <tr className="clickable-row" key={learner.id} onClick={() => onLearner(learner)}><td><button className="person-cell person-button"><UserAvatar name={learner.name} initials={learner.initials} src={learner.avatarUrl} /><span><strong>{learner.name}</strong><small>{learner.matricule} · {learner.email}</small></span></button></td><td>{learner.jobTitle}</td><td><span className="table-progress"><span><i style={{ width: `${learner.progress}%` }} /></span><strong>{learner.progress} %</strong></span></td><td><strong>{learner.completed}</strong> / {learner.assigned}</td><td><strong>{learner.lastLogin}</strong><small>{learner.lastLoginDetail}</small></td><td><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></td><td><button className="icon-button" aria-label={`Ouvrir la fiche de ${learner.name}`} onClick={(event) => { event.stopPropagation(); onLearner(learner); }}><ChevronRight size={18} /></button></td></tr>;
   return <>
-    <section className="page-heading"><div><span className="eyebrow">Gestion des utilisateurs</span><h1>Apprenants</h1><p>Suivez la progression, l’assiduité et les dernières connexions.</p></div><div className="heading-actions"><button className="secondary-button" onClick={exportCsv}><Download size={17} /> Exporter le suivi</button><button className="primary-button" onClick={() => setInviteOpen(true)}><UserPlus size={17} /> Créer un accès</button></div></section>
+    <section className="page-heading"><div><span className="eyebrow">Gestion des utilisateurs</span><h1>Apprenants par service</h1><p>Retrouvez chaque collaborateur dans sa rubrique métier et constituez des groupes de formation transverses.</p></div><div className="heading-actions"><button className="secondary-button" onClick={exportCsv}><Download size={17} /> Exporter le suivi</button><button className="secondary-button" onClick={() => setGroupsOpen(true)}><UsersRound size={17} /> Groupes de formation</button><button className="primary-button" onClick={() => setInviteOpen(true)}><UserPlus size={17} /> Créer un accès</button></div></section>
     {invited.length > 0 && <div className="success-banner"><CheckCircle2 size={18} /> {invited.length} accès apprenant{invited.length > 1 ? "s" : ""} créé{invited.length > 1 ? "s" : ""} ou relié{invited.length > 1 ? "s" : ""} pendant cette session.</div>}
+    {notice && <div className="success-banner" role="status"><CheckCircle2 size={18} /> {notice}</div>}
     {loadError && <div className="form-message" role="alert">{loadError}</div>}
-    <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, matricule, e-mail ou service…" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option><option>Actif</option><option>À relancer</option><option>Inactif</option></select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Apprenant</th><th>Service</th><th>Progression</th><th>Formations</th><th>Dernière connexion</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filtered.map((learner) => <tr className="clickable-row" key={learner.id} onClick={() => onLearner(learner)}><td><button className="person-cell person-button"><UserAvatar name={learner.name} initials={learner.initials} src={learner.avatarUrl} /><span><strong>{learner.name}</strong><small>{learner.matricule} · {learner.email}</small></span></button></td><td>{learner.department}</td><td><span className="table-progress"><span><i style={{ width: `${learner.progress}%` }} /></span><strong>{learner.progress} %</strong></span></td><td><strong>{learner.completed}</strong> / {learner.assigned}</td><td><strong>{learner.lastLogin}</strong><small>{learner.lastLoginDetail}</small></td><td><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></td><td><button className="icon-button" aria-label={`Ouvrir la fiche de ${learner.name}`} onClick={(event) => { event.stopPropagation(); onLearner(learner); }}><ChevronRight size={18} /></button></td></tr>)}{filtered.length === 0 && <tr><td colSpan={7}><div className="table-empty">{loading ? <Clock3 size={22} /> : <UsersRound size={22} />}<strong>{loading ? "Chargement des apprenants…" : "Aucun apprenant enregistré"}</strong><span>{loading ? "Veuillez patienter." : "Invitez un apprenant pour créer son dossier vide."}</span></div></td></tr>}</tbody></table></div></section>
+    <section className="panel service-directory"><header><div><span className="eyebrow">Répertoire métier</span><h2>Rubriques par service</h2></div><span className="count-badge">{services.length} service{services.length > 1 ? "s" : ""}</span></header><div className="service-filter-cards"><button className={service === "Tous les services" ? "active" : ""} onClick={() => setService("Tous les services")}><UsersRound size={18} /><span><strong>Tous les services</strong><small>{items.length} apprenant{items.length > 1 ? "s" : ""}</small></span></button>{services.map((department) => { const count = items.filter((learner) => learner.department === department).length; return <button key={department} className={service === department ? "active" : ""} onClick={() => setService(department)}><LibraryBig size={18} /><span><strong>{department}</strong><small>{count} apprenant{count > 1 ? "s" : ""}</small></span></button>; })}</div></section>
+    <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, matricule, e-mail, fonction…" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option><option>Actif</option><option>À relancer</option><option>Inactif</option></select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></div></section>
+    {serviceGroups.length ? <div className="learner-service-sections">{serviceGroups.map((group) => <section className="panel learner-service-section" key={group.department}><header><span className="service-section-icon"><UsersRound size={20} /></span><div><span className="eyebrow">Service</span><h2>{group.department}</h2></div><span className="count-badge">{group.learners.length} personne{group.learners.length > 1 ? "s" : ""}</span></header><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Apprenant</th><th>Fonction</th><th>Progression</th><th>Formations</th><th>Dernière connexion</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{group.learners.map(renderLearnerRow)}</tbody></table></div></section>)}</div> : <section className="panel table-empty service-empty">{loading ? <Clock3 size={22} /> : <UsersRound size={22} />}<strong>{loading ? "Chargement des apprenants…" : "Aucun apprenant dans cette rubrique"}</strong><span>{loading ? "Veuillez patienter." : "Modifiez les filtres ou créez un nouvel accès apprenant."}</span></section>}
     {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} onInvited={(email) => { setInvited([...invited, email]); setInviteOpen(false); }} />}
+    {groupsOpen && <TrainingGroupsModal learners={items} onClose={() => setGroupsOpen(false)} onChanged={(message) => setNotice(message)} />}
   </>;
+}
+
+function TrainingGroupsModal({ learners, onClose, onChanged }: { learners: Learner[]; onClose: () => void; onChanged: (message: string) => void }) {
+  const [groups, setGroups] = useState<TrainingGroup[]>([]);
+  const [loading, setLoading] = useState(() => usesNetlifyIdentity());
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [department, setDepartment] = useState("");
+  const [memberFilter, setMemberFilter] = useState("Tous les services");
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const departments = Array.from(new Set(learners.map((learner) => learner.department))).filter(Boolean).sort((left, right) => left.localeCompare(right, "fr"));
+
+  const loadGroups = useCallback(async () => {
+    if (!usesNetlifyIdentity()) { setLoading(false); return; }
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/.netlify/functions/lms-data?scope=groups");
+      const data = await response.json() as { groups?: Array<Record<string, unknown>>; members?: Array<Record<string, unknown>>; error?: string };
+      if (!response.ok) throw new Error(data.error || "Chargement des groupes impossible");
+      const members = data.members ?? [];
+      setGroups((data.groups ?? []).map((group) => ({
+        id: String(group.id), name: String(group.name ?? "Groupe"), description: String(group.description ?? ""), department: String(group.department ?? ""),
+        memberCount: Number(group.member_count ?? 0), assignedQuizzes: Number(group.assigned_quizzes ?? 0),
+        memberIds: members.filter((member) => String(member.group_id) === String(group.id)).map((member) => String(member.id)),
+      })));
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Chargement des groupes impossible"); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { const timer = window.setTimeout(() => void loadGroups(), 0); return () => window.clearTimeout(timer); }, [loadGroups]);
+
+  const resetForm = () => { setEditingId(""); setName(""); setDescription(""); setDepartment(""); setMemberFilter("Tous les services"); setMemberIds([]); setError(""); };
+  const editGroup = (group: TrainingGroup) => { setEditingId(group.id); setName(group.name); setDescription(group.description); setDepartment(group.department); setMemberFilter(group.department || "Tous les services"); setMemberIds(group.memberIds); setError(""); };
+  const toggleMember = (learnerId: string) => setMemberIds((current) => current.includes(learnerId) ? current.filter((id) => id !== learnerId) : [...current, learnerId]);
+  const visibleLearners = learners.filter((learner) => memberFilter === "Tous les services" || learner.department === memberFilter);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setError("");
+    if (!memberIds.length) { setError("Sélectionnez au moins un apprenant."); return; }
+    setSaving(true);
+    try {
+      if (usesNetlifyIdentity()) {
+        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: editingId ? "update-training-group" : "create-training-group", groupId: editingId || undefined, name, description, department, memberIds }) });
+        const data = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(data.error || "Enregistrement du groupe impossible");
+      }
+      onChanged(`Le groupe « ${name} » a été ${editingId ? "mis à jour" : "créé"} avec ${memberIds.length} apprenant${memberIds.length > 1 ? "s" : ""}.`);
+      resetForm(); await loadGroups();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Enregistrement du groupe impossible"); }
+    finally { setSaving(false); }
+  };
+  const removeGroup = async (group: TrainingGroup) => {
+    if (!window.confirm(`Supprimer le groupe « ${group.name} » ? Les résultats déjà enregistrés seront conservés.`)) return;
+    setError("");
+    try {
+      if (usesNetlifyIdentity()) {
+        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete-training-group", groupId: group.id }) });
+        const data = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(data.error || "Suppression impossible");
+      }
+      setGroups((current) => current.filter((item) => item.id !== group.id));
+      if (editingId === group.id) resetForm();
+      onChanged(`Le groupe « ${group.name} » a été supprimé.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Suppression impossible"); }
+  };
+
+  return <Modal title="Groupes de formation" onClose={onClose} wide><div className="training-group-workspace"><section className="training-group-list"><header><div><span className="eyebrow">Cohortes</span><h3>Groupes enregistrés</h3></div><button className="secondary-button compact-action" onClick={resetForm}><Plus size={15} /> Nouveau groupe</button></header>{loading ? <div className="studio-inline-empty"><Clock3 size={20} /><span>Chargement des groupes…</span></div> : groups.length ? groups.map((group) => <article key={group.id} className={editingId === group.id ? "active" : ""}><span className="group-emblem"><UsersRound size={19} /></span><span><strong>{group.name}</strong><small>{group.department || "Multi-services"} · {group.memberCount} membre{group.memberCount > 1 ? "s" : ""}</small><small>{group.assignedQuizzes} QCM affecté{group.assignedQuizzes > 1 ? "s" : ""}</small></span><button className="icon-button" aria-label={`Modifier ${group.name}`} onClick={() => editGroup(group)}><Edit3 size={16} /></button><button className="icon-button danger-icon" aria-label={`Supprimer ${group.name}`} onClick={() => void removeGroup(group)}><Trash2 size={16} /></button></article>) : <div className="studio-inline-empty"><UsersRound size={20} /><span>Aucun groupe de formation créé.</span></div>}</section><form className="training-group-editor modal-form" onSubmit={submit}><div><span className="eyebrow">{editingId ? "Modification" : "Nouveau groupe"}</span><h3>{editingId ? "Mettre à jour le groupe" : "Composer un groupe"}</h3><p>Un groupe peut réunir plusieurs personnes d’un même service ou de services différents.</p></div><label>Nom du groupe<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex. Cohorte Accueil — septembre" required /></label><label>Service de référence<select value={department} onChange={(event) => { setDepartment(event.target.value); setMemberFilter(event.target.value || "Tous les services"); }}><option value="">Multi-services</option>{departments.map((item) => <option value={item} key={item}>{item}</option>)}</select></label><label>Description<textarea rows={2} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Objectif ou contexte du groupe…" /></label><div className="group-member-picker"><header><span><strong>Membres sélectionnés</strong><small>{memberIds.length} personne{memberIds.length > 1 ? "s" : ""}</small></span><select value={memberFilter} onChange={(event) => setMemberFilter(event.target.value)}><option>Tous les services</option>{departments.map((item) => <option value={item} key={item}>{item}</option>)}</select></header><div>{visibleLearners.map((learner) => <label key={learner.id} className={memberIds.includes(learner.id) ? "selected" : ""}><input type="checkbox" checked={memberIds.includes(learner.id)} onChange={() => toggleMember(learner.id)} /><UserAvatar name={learner.name} initials={learner.initials} src={learner.avatarUrl} /><span><strong>{learner.name}</strong><small>{learner.department} · {learner.jobTitle}</small></span></label>)}{!visibleLearners.length && <div className="studio-inline-empty"><Inbox size={18} /><span>Aucun apprenant dans ce service.</span></div>}</div></div>{error && <p className="form-message" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" onClick={onClose}>Fermer</button>{editingId && <button type="button" className="secondary-button" onClick={resetForm}>Annuler la modification</button>}<button type="submit" className="primary-button" disabled={saving}><Save size={16} /> {saving ? "Enregistrement…" : editingId ? "Mettre à jour" : "Créer le groupe"}</button></footer></form></div></Modal>;
 }
 
 function LearnerProfileView({ learner: initialLearner, onBack }: { learner: Learner; onBack: () => void }) {
@@ -1219,6 +1320,8 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
   const [published, setPublished] = useState(false);
   const [quizzes, setQuizzes] = useState<Array<{ id: string; title: string; questionCount: number; published: boolean }>>([]);
   const [quizOpen, setQuizOpen] = useState(false);
+  const [editingQuizId, setEditingQuizId] = useState("");
+  const [quizToAssign, setQuizToAssign] = useState<QuizAdminRecord | null>(null);
   const activeModule = modules.find((module) => module.id === activeModuleId) ?? modules[0];
 
   const postAction = async (action: string, payload: Record<string, unknown>) => {
@@ -1236,6 +1339,17 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
       setQuizzes((current) => current.map((item) => item.id === quiz.id ? { ...item, published: nextPublished } : nextPublished ? { ...item, published: false } : item));
       setFeedback(nextPublished ? `QCM « ${quiz.title} » publié et disponible dans le parcours.` : `QCM « ${quiz.title} » retiré de l’espace apprenant.`);
     } catch (error) { setFeedback(error instanceof Error ? error.message : "Mise à jour du QCM impossible"); }
+    finally { setSaving(false); }
+  };
+
+  const removeQuiz = async (quiz: { id: string; title: string }) => {
+    if (!window.confirm(`Supprimer le QCM « ${quiz.title} » ? Les résultats existants resteront archivés.`)) return;
+    setSaving(true); setFeedback("");
+    try {
+      if (usesNetlifyIdentity()) await postAction("delete-quiz", { quizId: quiz.id });
+      setQuizzes((current) => current.filter((item) => item.id !== quiz.id));
+      setFeedback(`QCM « ${quiz.title} » supprimé de la liste active.`);
+    } catch (error) { setFeedback(error instanceof Error ? error.message : "Suppression du QCM impossible"); }
     finally { setSaving(false); }
   };
 
@@ -1405,27 +1519,43 @@ function ManageContentModal({ course, onClose, catalogSeed, onPublished }: { cou
           {feedback && <p className="content-feedback" role="status">{feedback}</p>}
           {tab === "structure" && <section className="studio-pane studio-details"><div className="form-grid"><label className="full-field">Titre du parcours<input value={details.title} onChange={(event) => setDetails({ ...details, title: event.target.value })} /></label><label>Catégorie<input value={details.category} onChange={(event) => setDetails({ ...details, category: event.target.value })} /></label><label>Durée totale estimée (minutes)<input type="number" min="0" value={details.durationMinutes} onChange={(event) => setDetails({ ...details, durationMinutes: Number(event.target.value) })} /></label><label className="full-field">Public concerné<input value={details.audience} onChange={(event) => setDetails({ ...details, audience: event.target.value })} /></label><label className="full-field">Objectif pédagogique<textarea rows={3} value={details.objective} onChange={(event) => setDetails({ ...details, objective: event.target.value })} /></label><label className="full-field">Présentation du parcours<textarea rows={4} value={details.description} onChange={(event) => setDetails({ ...details, description: event.target.value })} /></label><label className="check-field full-field"><input type="checkbox" checked={details.mandatory} onChange={(event) => setDetails({ ...details, mandatory: event.target.checked })} /><span><strong>Formation obligatoire</strong><small>Les échéances pourront être définies lors de l’affectation.</small></span></label></div>{catalogSeed?.program?.length ? <div className="catalog-program"><span className="form-section-title">Programme suggéré par le catalogue</span><ol>{catalogSeed.program.map((item) => <li key={item}>{item}</li>)}</ol></div> : null}</section>}
           {tab === "content" && <section className="studio-pane studio-content-grid"><aside className="studio-module-list"><header><div><span className="eyebrow">Structure</span><strong>{modules.length} module{modules.length > 1 ? "s" : ""}</strong></div><button className="icon-button" aria-label="Ajouter un module" onClick={addModule}><Plus size={18} /></button></header>{modules.map((module, index) => <button key={module.id} className={module.id === activeModule?.id ? "active" : ""} onClick={() => setActiveModuleId(module.id)}><GripVertical size={15} /><span><small>Module {index + 1}</small><strong>{module.title}</strong></span><ChevronRight size={15} /></button>)}<button className="secondary-button add-module-button" onClick={addModule}><Plus size={16} /> Ajouter un module</button></aside>{activeModule && <div className="studio-module-editor"><div className="module-fields form-grid"><label className="full-field">Titre du module<input value={activeModule.title} onChange={(event) => updateModule(activeModule.id, { title: event.target.value })} /></label><label>Type de module<select value={activeModule.contentType} onChange={(event) => updateModule(activeModule.id, { contentType: event.target.value })}><option value="text">Cours / texte</option><option value="video">Vidéo</option><option value="document">Document</option><option value="audio">Audio / podcast</option><option value="scorm">Package SCORM</option><option value="quiz">Évaluation</option></select></label><label>Durée (minutes)<input type="number" min="0" value={activeModule.durationMinutes} onChange={(event) => updateModule(activeModule.id, { durationMinutes: Number(event.target.value) })} /></label><label className="full-field">Résumé ou contenu textuel<textarea rows={4} value={activeModule.description} onChange={(event) => updateModule(activeModule.id, { description: event.target.value })} placeholder="Notions abordées, consignes, mise en situation…" /></label><label className="full-field">Objectifs du module — un par ligne<textarea rows={3} value={activeModule.objectives.join("\n")} onChange={(event) => updateModule(activeModule.id, { objectives: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} /></label></div><section><span className="form-section-title"><UploadCloud size={17} /> Déposer des fichiers</span><label className="upload-zone studio-upload"><UploadCloud size={29} /><strong>{uploading ? "Import et contrôle en cours…" : "Sélectionnez un ou plusieurs contenus"}</strong><small>PDF, Word, PowerPoint, MP4/WebM, MP3/WAV/M4A/OGG ou SCORM 1.2/2004 (.zip) · 50 Mo par fichier</small><input type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.webm,.mp3,.wav,.m4a,.ogg,.aac,.zip,video/*,audio/*" onChange={addFiles} disabled={uploading} /></label><p className="scorm-note"><Archive size={15} /> Les archives SCORM sont contrôlées : présence du manifeste, version et intégrité du ZIP.</p></section><section><span className="form-section-title"><Link2 size={17} /> Ajouter un lien</span><form className="studio-link-form" onSubmit={addLink}><select value={linkKind} onChange={(event) => setLinkKind(event.target.value)}><option value="video">Vidéo</option><option value="audio">Audio</option><option value="external">Fichier ou page web</option></select><input value={linkName} onChange={(event) => setLinkName(event.target.value)} placeholder="Nom visible (facultatif)" /><input type="url" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://…" required /><button className="secondary-button" type="submit"><Plus size={15} /> Ajouter</button></form></section><section><span className="form-section-title"><LibraryBig size={17} /> Ressources du module</span>{activeModule.resources.length ? <div className="managed-resources studio-resources">{activeModule.resources.map((resource, index) => <div key={resource.id ?? `${resource.name}-${index}`}><span className={`resource-icon ${resource.contentKind}`}>{studioResourceIcon(resource.contentKind)}</span><span><strong>{resource.name}</strong><small>{resource.contentKind === "scorm" ? String(resource.metadata?.version ?? "Package SCORM") : resource.contentKind}{resource.sizeBytes ? ` · ${(resource.sizeBytes / 1024 / 1024).toFixed(1)} Mo` : " · lien sécurisé"}</small></span>{resource.url && <a className="icon-button" href={resource.url} target="_blank" rel="noreferrer" aria-label="Ouvrir"><ExternalLink size={16} /></a>}<button className="icon-button" onClick={() => void removeResource(resource)} aria-label="Supprimer"><Trash2 size={16} /></button></div>)}</div> : <div className="studio-inline-empty"><Inbox size={20} /><span>Aucune ressource ajoutée à ce module.</span></div>}</section></div>}</section>}
-          {tab === "evaluation" && <section className="studio-pane evaluation-studio"><div className="evaluation-intro"><span className="quiz-card-icon tone-violet"><FileQuestion size={26} /></span><div><span className="eyebrow">Évaluation des acquis</span><h3>Créer ou importer un questionnaire</h3><p>Choix unique, choix multiples, vrai/faux et réponse courte. Les fichiers JSON et Excel sont contrôlés avant enregistrement.</p></div><button className="primary-button" onClick={() => setQuizOpen(true)}><Plus size={16} /> Créer un QCM</button></div><div className="evaluation-import-cards"><a href="/modeles/qcm-walyah-modele.xlsx" download><Table2 size={22} /><span><strong>Modèle Excel</strong><small>Colonnes prêtes et exemples inclus</small></span><Download size={16} /></a><a href="/modeles/qcm-walyah-exemple.json" download><FileText size={22} /><span><strong>Modèle JSON</strong><small>Structure technique complète</small></span><Download size={16} /></a></div>{quizzes.length ? <div className="studio-quiz-list">{quizzes.map((quiz) => <article key={quiz.id}><FileQuestion size={19} /><span><strong>{quiz.title}</strong><small>{quiz.questionCount} question{quiz.questionCount > 1 ? "s" : ""}</small></span><span className={`status-tag ${quiz.published ? "status-actif" : "status-draft"}`}>{quiz.published ? "Publié" : "Brouillon"}</span><button className="secondary-button compact-action" disabled={saving} onClick={() => void toggleQuizPublication(quiz)}>{quiz.published ? "Dépublier" : "Publier"}</button></article>)}</div> : <div className="studio-inline-empty"><FileQuestion size={21} /><span>Aucun questionnaire n’est encore relié à ce parcours.</span></div>}<div className="import-rules-summary"><strong>Règles principales d’import</strong><ul><li>100 questions maximum par questionnaire.</li><li>2 à 6 propositions pour les choix uniques ou multiples.</li><li>Bonnes réponses Excel indiquées par lettres : A ou A|C.</li><li>Un seul QCM final est publié par parcours ; publier un nouveau QCM remplace le précédent.</li><li>Une erreur précise la ligne concernée sans bloquer les lignes valides.</li></ul></div></section>}
+          {tab === "evaluation" && <section className="studio-pane evaluation-studio"><div className="evaluation-intro"><span className="quiz-card-icon tone-violet"><FileQuestion size={26} /></span><div><span className="eyebrow">Évaluation des acquis</span><h3>Créer ou importer un questionnaire</h3><p>Choix unique, choix multiples, vrai/faux et réponse courte. Les fichiers JSON et Excel sont contrôlés puis enregistrés dans la base.</p></div><button className="primary-button" onClick={() => { setEditingQuizId(""); setQuizOpen(true); }}><Plus size={16} /> Créer ou importer</button></div><div className="evaluation-import-cards"><a href="/modeles/qcm-walyah-modele.xlsx" download><Table2 size={22} /><span><strong>Modèle Excel</strong><small>Colonnes prêtes et exemples inclus</small></span><Download size={16} /></a><a href="/modeles/qcm-walyah-exemple.json" download><FileText size={22} /><span><strong>Modèle JSON</strong><small>Structure technique complète</small></span><Download size={16} /></a></div>{quizzes.length ? <div className="studio-quiz-list">{quizzes.map((quiz) => <article key={quiz.id}><FileQuestion size={19} /><span><strong>{quiz.title}</strong><small>{quiz.questionCount} question{quiz.questionCount > 1 ? "s" : ""}</small></span><span className={`status-tag ${quiz.published ? "status-actif" : "status-draft"}`}>{quiz.published ? "Publié" : "Brouillon"}</span><span className="studio-quiz-actions"><button className="secondary-button compact-action" disabled={saving} onClick={() => void toggleQuizPublication(quiz)}>{quiz.published ? "Dépublier" : "Publier"}</button><button className="icon-button" aria-label={`Modifier ${quiz.title}`} onClick={() => { setEditingQuizId(quiz.id); setQuizOpen(true); }}><Edit3 size={15} /></button><button className="icon-button" aria-label={`Affecter ${quiz.title}`} onClick={() => setQuizToAssign({ id: quiz.id, title: quiz.title, courseId: course.id, courseTitle: details.title, questionCount: quiz.questionCount, threshold: 80, published: quiz.published, participants: 0, averageScore: 0, assignedUsers: 0, assignedGroups: 0 })}><Send size={15} /></button><button className="icon-button danger-icon" aria-label={`Supprimer ${quiz.title}`} onClick={() => void removeQuiz(quiz)}><Trash2 size={15} /></button></span></article>)}</div> : <div className="studio-inline-empty"><FileQuestion size={21} /><span>Aucun questionnaire n’est encore relié à ce parcours.</span></div>}<div className="import-rules-summary"><strong>Règles principales d’import</strong><ul><li>100 questions maximum par questionnaire.</li><li>2 à 6 propositions pour les choix uniques ou multiples.</li><li>Bonnes réponses Excel indiquées par lettres : A ou A|C.</li><li>Plusieurs QCM peuvent être publiés et ciblés sur des groupes différents.</li><li>Une erreur précise la ligne concernée sans bloquer les lignes valides.</li></ul></div></section>}
           {tab === "publication" && <section className="studio-pane publication-studio"><div className="publication-heading"><span className={`publication-emblem ${published ? "published" : ""}`}>{published ? <CheckCircle2 size={34} /> : <ShieldCheck size={34} />}</span><div><span className="eyebrow">Dernière vérification</span><h3>{published ? "Ce parcours est publié" : "Votre parcours est-il prêt ?"}</h3><p>Une formation publiée devient disponible dans la liste d’affectation des apprenants.</p></div></div><div className="readiness-list">{readiness.map((item) => <div key={item.label} className={item.done ? "done" : "pending"}>{item.done ? <CheckCircle2 size={19} /> : <Circle size={19} />}<span>{item.label}</span><strong>{item.done ? "Prêt" : "À compléter"}</strong></div>)}<div className="optional"><FileQuestion size={19} /><span>QCM final</span><strong>{quizzes.length ? `${quizzes.length} créé${quizzes.length > 1 ? "s" : ""}` : "Optionnel"}</strong></div></div><div className="publication-actions"><button className="secondary-button" onClick={() => void persistStudio()} disabled={saving}><Save size={16} /> Enregistrer le brouillon</button><button className="primary-button" onClick={() => void publishCourse()} disabled={saving || !canPublish}><CheckCircle2 size={16} /> {published ? "Mettre à jour la publication" : "Publier la formation"}</button></div></section>}
         </>}
         <footer className="studio-footer"><span>{published ? <><CheckCircle2 size={15} /> Parcours publié</> : <><Clock3 size={15} /> Brouillon en préparation</>}</span><div><button className="secondary-button" onClick={onClose}>Fermer</button><button className="primary-button" onClick={() => void persistStudio()} disabled={saving || loading}><Save size={16} /> {saving ? "Enregistrement…" : "Enregistrer"}</button></div></footer>
       </div>
     </Modal>
-    {quizOpen && <QuizBuilder initialCourseId={course.id} onClose={() => setQuizOpen(false)} onSave={(quiz) => { setQuizOpen(false); setQuizzes((current) => [{ ...quiz, published: false }, ...current]); setFeedback(`QCM « ${quiz.title} » enregistré comme brouillon.`); }} />}
+    {quizOpen && <QuizBuilder quizId={editingQuizId || undefined} initialCourseId={course.id} onClose={() => { setQuizOpen(false); setEditingQuizId(""); }} onSave={(quiz) => { setQuizOpen(false); setQuizzes((current) => editingQuizId ? current.map((item) => item.id === quiz.id ? { ...item, title: quiz.title, questionCount: quiz.questionCount } : item) : [{ ...quiz, published: false }, ...current]); setEditingQuizId(""); setFeedback(`QCM « ${quiz.title} » enregistré dans la base.`); }} />}
+    {quizToAssign && <QuizAssignmentModal quiz={quizToAssign} onClose={() => setQuizToAssign(null)} onAssigned={(count) => { setQuizToAssign(null); setFeedback(`QCM affecté à ${count} apprenant${count > 1 ? "s" : ""}.`); }} />}
   </>;
 }
 
 function QuizzesView() {
   const [builderOpen, setBuilderOpen] = useState(false);
-  const [created, setCreated] = useState(0);
+  const [editingQuiz, setEditingQuiz] = useState<QuizAdminRecord | null>(null);
+  const [assignmentQuiz, setAssignmentQuiz] = useState<QuizAdminRecord | null>(null);
   const [notice, setNotice] = useState("");
   const [savingId, setSavingId] = useState("");
-  const [items, setItems] = useState<Array<{ id: string; courseId: string; courseTitle: string; questionCount: number; threshold: number; published: boolean; participants: number; averageScore: number }>>([]);
-  useEffect(() => {
-    if (!usesNetlifyIdentity()) return;
-    void fetch("/.netlify/functions/lms-data?scope=admin").then((response) => response.ok ? response.json() : Promise.reject()).then((data: { quizStats?: Array<Record<string, unknown>> }) => setItems((data.quizStats ?? []).map((item) => ({ id: String(item.id), courseId: String(item.course_id ?? ""), courseTitle: String(item.course_title ?? "Formation"), questionCount: Number(item.question_count ?? 0), threshold: Number(item.pass_threshold ?? 80), published: Boolean(item.published), participants: Number(item.participants ?? 0), averageScore: Number(item.average_score ?? 0) })))).catch(() => undefined);
-  }, [created]);
-  const togglePublished = async (item: typeof items[number]) => {
+  const [items, setItems] = useState<QuizAdminRecord[]>([]);
+  const [loading, setLoading] = useState(() => usesNetlifyIdentity());
+  const [loadError, setLoadError] = useState("");
+  const loadQuizzes = useCallback(async () => {
+    if (!usesNetlifyIdentity()) { setLoading(false); return; }
+    setLoading(true); setLoadError("");
+    try {
+      const response = await fetch("/.netlify/functions/lms-data?scope=admin");
+      const data = await response.json() as { quizStats?: Array<Record<string, unknown>>; error?: string };
+      if (!response.ok) throw new Error(data.error || "Chargement des QCM impossible");
+      setItems((data.quizStats ?? []).map((item) => ({
+        id: String(item.id), title: String(item.title ?? "Évaluation"), courseId: String(item.course_id ?? ""), courseTitle: String(item.course_title ?? "Formation"),
+        questionCount: Number(item.question_count ?? 0), threshold: Number(item.pass_threshold ?? 80), published: Boolean(item.published),
+        participants: Number(item.participants ?? 0), averageScore: Number(item.average_score ?? 0), assignedUsers: Number(item.assigned_users ?? 0), assignedGroups: Number(item.assigned_groups ?? 0),
+      })));
+    } catch (caught) { setLoadError(caught instanceof Error ? caught.message : "Chargement des QCM impossible"); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { const timer = window.setTimeout(() => void loadQuizzes(), 0); return () => window.clearTimeout(timer); }, [loadQuizzes]);
+  const togglePublished = async (item: QuizAdminRecord) => {
     setSavingId(item.id); setNotice("");
     try {
       const nextPublished = !item.published;
@@ -1434,22 +1564,86 @@ function QuizzesView() {
         const data = await response.json() as { error?: string };
         if (!response.ok) throw new Error(data.error || "Mise à jour impossible");
       }
-      setItems((current) => current.map((quiz) => quiz.id === item.id ? { ...quiz, published: nextPublished } : nextPublished && quiz.courseId === item.courseId ? { ...quiz, published: false } : quiz));
+      setItems((current) => current.map((quiz) => quiz.id === item.id ? { ...quiz, published: nextPublished } : quiz));
       setNotice(nextPublished ? "Le QCM est publié dans le parcours apprenant." : "Le QCM a été dépublié.");
     } catch (error) { setNotice(error instanceof Error ? error.message : "Mise à jour impossible"); }
     finally { setSavingId(""); }
   };
+  const deleteQuiz = async (item: QuizAdminRecord) => {
+    if (!window.confirm(`Supprimer le QCM « ${item.title} » ? Les tentatives et résultats existants resteront archivés pour la traçabilité.`)) return;
+    setSavingId(item.id); setNotice("");
+    try {
+      if (usesNetlifyIdentity()) {
+        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete-quiz", quizId: item.id }) });
+        const data = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(data.error || "Suppression impossible");
+      }
+      setItems((current) => current.filter((quiz) => quiz.id !== item.id));
+      setNotice(`Le QCM « ${item.title} » a été supprimé de la liste active.`);
+    } catch (caught) { setNotice(caught instanceof Error ? caught.message : "Suppression impossible"); }
+    finally { setSavingId(""); }
+  };
   return <>
-    <section className="page-heading"><div><span className="eyebrow">Évaluation des acquis</span><h1>QCM & évaluations</h1><p>Composez plusieurs types de questions, importez JSON ou Excel et analysez les scores.</p></div><div className="heading-actions"><a className="secondary-button button-link" href="/modeles/qcm-walyah-modele.xlsx" download><Table2 size={16} /> Modèle Excel</a><a className="secondary-button button-link" href="/modeles/qcm-walyah-exemple.json" download><Download size={16} /> Modèle JSON</a><button className="primary-button" onClick={() => setBuilderOpen(true)}><Plus size={17} /> Créer un QCM</button></div></section>
-    {(created > 0 || notice) && <div className="success-banner" role="status"><CheckCircle2 size={18} /> {notice || "Nouveau QCM enregistré comme brouillon."}</div>}
-    {items.length ? <div className="quiz-admin-grid">{items.map((item, index) => <article className="panel quiz-admin-card" key={item.id}><div className={`quiz-card-icon tone-${(["teal", "blue", "violet", "coral"] as const)[index % 4]}`}><FileQuestion size={25} /></div><span className={`status-tag ${item.published ? "status-active" : "status-draft"}`}>{item.published ? "Publié" : "Brouillon"}</span><h2>{item.courseTitle}</h2><p>{item.questionCount} question{item.questionCount > 1 ? "s" : ""} · Seuil de réussite {item.threshold} %</p><div className="quiz-stats"><div><strong>{item.participants}</strong><span>Participants</span></div><div><strong>{item.averageScore} %</strong><span>Score moyen</span></div></div><button className={item.published ? "secondary-button" : "primary-button"} disabled={savingId === item.id} onClick={() => void togglePublished(item)}>{savingId === item.id ? "Mise à jour…" : item.published ? "Dépublier le QCM" : "Publier le QCM"}</button></article>)}</div> : <section className="panel learner-empty-state compact-empty"><span className="empty-icon"><FileQuestion size={28} /></span><h2>Aucun QCM enregistré</h2><p>Créez le premier questionnaire ou importez un modèle JSON ou Excel.</p></section>}
-    {builderOpen && <QuizBuilder onClose={() => setBuilderOpen(false)} onSave={() => { setCreated(created + 1); setBuilderOpen(false); }} />}
+    <section className="page-heading"><div><span className="eyebrow">Évaluation des acquis</span><h1>QCM & évaluations</h1><p>Importez, enregistrez, modifiez et affectez chaque questionnaire à une personne ou à un groupe de formation.</p></div><div className="heading-actions"><a className="secondary-button button-link" href="/modeles/qcm-walyah-modele.xlsx" download><Table2 size={16} /> Modèle Excel</a><a className="secondary-button button-link" href="/modeles/qcm-walyah-exemple.json" download><Download size={16} /> Modèle JSON</a><button className="primary-button" onClick={() => { setEditingQuiz(null); setBuilderOpen(true); }}><Plus size={17} /> Créer ou importer</button></div></section>
+    {notice && <div className="success-banner" role="status"><CheckCircle2 size={18} /> {notice}</div>}
+    {loadError && <div className="form-message" role="alert">{loadError}</div>}
+    {items.length ? <div className="quiz-admin-grid">{items.map((item, index) => <article className="panel quiz-admin-card" key={item.id}><div className={`quiz-card-icon tone-${(["teal", "blue", "violet", "coral"] as const)[index % 4]}`}><FileQuestion size={25} /></div><span className={`status-tag ${item.published ? "status-active" : "status-draft"}`}>{item.published ? "Publié" : "Brouillon"}</span><span className="eyebrow">{item.courseTitle}</span><h2>{item.title}</h2><p>{item.questionCount} question{item.questionCount > 1 ? "s" : ""} · Seuil de réussite {item.threshold} %</p><div className="quiz-stats"><div><strong>{item.assignedUsers}</strong><span>Affectés</span></div><div><strong>{item.participants}</strong><span>Participants</span></div><div><strong>{item.averageScore} %</strong><span>Score moyen</span></div></div><div className="quiz-card-actions"><button className={item.published ? "secondary-button" : "primary-button"} disabled={savingId === item.id} onClick={() => void togglePublished(item)}>{savingId === item.id ? "Mise à jour…" : item.published ? "Dépublier" : "Publier"}</button><button className="secondary-button" onClick={() => setAssignmentQuiz(item)}><Send size={15} /> Affecter</button><button className="secondary-button" onClick={() => { setEditingQuiz(item); setBuilderOpen(true); }}><Edit3 size={15} /> Modifier</button><button className="icon-button danger-icon" aria-label={`Supprimer ${item.title}`} disabled={savingId === item.id} onClick={() => void deleteQuiz(item)}><Trash2 size={16} /></button></div>{item.assignedGroups > 0 && <small className="quiz-assignment-summary"><UsersRound size={14} /> Affecté via {item.assignedGroups} groupe{item.assignedGroups > 1 ? "s" : ""}</small>}</article>)}</div> : <section className="panel learner-empty-state compact-empty"><span className="empty-icon">{loading ? <Clock3 size={28} /> : <FileQuestion size={28} />}</span><h2>{loading ? "Chargement des QCM…" : "Aucun QCM enregistré"}</h2><p>{loading ? "La bibliothèque des évaluations est en cours de synchronisation." : "Créez le premier questionnaire ou importez un modèle JSON ou Excel."}</p></section>}
+    {builderOpen && <QuizBuilder quizId={editingQuiz?.id} initialCourseId={editingQuiz?.courseId} onClose={() => { setBuilderOpen(false); setEditingQuiz(null); }} onSave={(quiz) => { setBuilderOpen(false); setEditingQuiz(null); setNotice(`Le QCM « ${quiz.title} » est bien enregistré dans la base de données.`); void loadQuizzes(); }} />}
+    {assignmentQuiz && <QuizAssignmentModal quiz={assignmentQuiz} onClose={() => setAssignmentQuiz(null)} onAssigned={(count) => { setAssignmentQuiz(null); setNotice(`${assignmentQuiz.title} a été affecté à ${count} apprenant${count > 1 ? "s" : ""}.`); void loadQuizzes(); }} />}
   </>;
+}
+
+function QuizAssignmentModal({ quiz, onClose, onAssigned }: { quiz: QuizAdminRecord; onClose: () => void; onAssigned: (count: number) => void }) {
+  const [learners, setLearners] = useState<Array<{ id: string; name: string; department: string }>>([]);
+  const [groups, setGroups] = useState<TrainingGroup[]>([]);
+  const [targetType, setTargetType] = useState<"learner" | "group">("learner");
+  const [targetId, setTargetId] = useState("");
+  const [dueAt, setDueAt] = useState("");
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(() => usesNetlifyIdentity());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!usesNetlifyIdentity()) return;
+    void Promise.all([
+      fetch("/.netlify/functions/lms-data?scope=admin").then(async (response) => { const data = await response.json() as { learners?: Array<Record<string, unknown>>; error?: string }; if (!response.ok) throw new Error(data.error || "Chargement des apprenants impossible"); return data.learners ?? []; }),
+      fetch("/.netlify/functions/lms-data?scope=groups").then(async (response) => { const data = await response.json() as { groups?: Array<Record<string, unknown>>; members?: Array<Record<string, unknown>>; error?: string }; if (!response.ok) throw new Error(data.error || "Chargement des groupes impossible"); return data; }),
+    ]).then(([learnerRows, groupData]) => {
+      const loadedLearners = learnerRows.map((item) => ({ id: String(item.id), name: String(item.full_name ?? item.email ?? "Apprenant"), department: String(item.department ?? "Non renseigné") }));
+      const memberRows = groupData.members ?? [];
+      const loadedGroups = (groupData.groups ?? []).map((group): TrainingGroup => ({ id: String(group.id), name: String(group.name ?? "Groupe"), description: String(group.description ?? ""), department: String(group.department ?? ""), memberCount: Number(group.member_count ?? 0), assignedQuizzes: Number(group.assigned_quizzes ?? 0), memberIds: memberRows.filter((member) => String(member.group_id) === String(group.id)).map((member) => String(member.id)) }));
+      setLearners(loadedLearners); setGroups(loadedGroups); setTargetId(loadedLearners[0]?.id ?? loadedGroups[0]?.id ?? "");
+    }).catch((caught) => setError(caught instanceof Error ? caught.message : "Chargement des destinataires impossible")).finally(() => setLoading(false));
+  }, []);
+  const switchTarget = (next: "learner" | "group") => { setTargetType(next); setTargetId(next === "learner" ? learners[0]?.id ?? "" : groups[0]?.id ?? ""); setError(""); };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setError("");
+    if (!targetId) { setError(targetType === "group" ? "Créez ou sélectionnez un groupe de formation." : "Sélectionnez un apprenant."); return; }
+    setSaving(true);
+    try {
+      let assignedCount = targetType === "group" ? groups.find((group) => group.id === targetId)?.memberCount ?? 0 : 1;
+      if (usesNetlifyIdentity()) {
+        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "assign-quiz", quizId: quiz.id, targetType, targetId, dueAt: dueAt || null, note }) });
+        const data = await response.json() as { assignedCount?: number; error?: string };
+        if (!response.ok) throw new Error(data.error || "Affectation impossible");
+        assignedCount = Number(data.assignedCount ?? assignedCount);
+      }
+      onAssigned(assignedCount);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Affectation impossible"); }
+    finally { setSaving(false); }
+  };
+  return <Modal title={`Affecter · ${quiz.title}`} onClose={onClose} wide><form className="modal-form quiz-assignment-form" onSubmit={submit}><div className="neutral-note"><FileQuestion size={18} /><span><strong>{quiz.courseTitle}</strong><small>Le QCM sera publié et la formation correspondante sera ajoutée automatiquement aux personnes sélectionnées.</small></span></div><nav className="assignment-target-tabs" aria-label="Type de destinataire"><button type="button" className={targetType === "learner" ? "active" : ""} onClick={() => switchTarget("learner")}><UserRound size={16} /> Un apprenant</button><button type="button" className={targetType === "group" ? "active" : ""} onClick={() => switchTarget("group")}><UsersRound size={16} /> Un groupe</button></nav>{loading ? <div className="studio-inline-empty"><Clock3 size={20} /><span>Chargement des destinataires…</span></div> : targetType === "learner" ? <label>Apprenant<select value={targetId} onChange={(event) => setTargetId(event.target.value)} required><option value="">Sélectionner…</option>{learners.map((learner) => <option value={learner.id} key={learner.id}>{learner.name} · {learner.department}</option>)}</select></label> : <label>Groupe de formation<select value={targetId} onChange={(event) => setTargetId(event.target.value)} required><option value="">Sélectionner…</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name} · {group.memberCount} membre{group.memberCount > 1 ? "s" : ""}</option>)}</select></label>}<label>Date limite<input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label><label>Consigne<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Objectif, priorité ou contexte de l’évaluation…" /></label>{error && <p className="form-message" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={loading || saving}><Send size={16} /> {saving ? "Affectation…" : targetType === "group" ? "Affecter au groupe" : "Affecter à l’apprenant"}</button></footer></form></Modal>;
 }
 
 const quizTypeLabels: Record<QuizQuestionType, string> = { single: "Choix unique", multiple: "Choix multiples", true_false: "Vrai / faux", short_text: "Réponse courte" };
 
-function QuizBuilder({ onClose, onSave, initialCourseId }: { onClose: () => void; onSave: (quiz: { id: string; title: string; questionCount: number }) => void; initialCourseId?: string }) {
+function parseQuizArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (typeof value !== "string") return [];
+  try { const parsed = JSON.parse(value) as unknown; return Array.isArray(parsed) ? parsed as T[] : []; } catch { return []; }
+}
+
+function QuizBuilder({ onClose, onSave, initialCourseId, quizId }: { onClose: () => void; onSave: (quiz: { id: string; title: string; questionCount: number }) => void; initialCourseId?: string; quizId?: string }) {
   const [title, setTitle] = useState("Évaluation finale");
   const [courseId, setCourseId] = useState(initialCourseId ?? courses[0].id);
   const [courseOptions, setCourseOptions] = useState(() => {
@@ -1461,7 +1655,9 @@ function QuizBuilder({ onClose, onSave, initialCourseId }: { onClose: () => void
   const [error, setError] = useState("");
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importStatus, setImportStatus] = useState("");
+  const [importedFileName, setImportedFileName] = useState("");
   const [savingQuiz, setSavingQuiz] = useState(false);
+  const [loadingQuiz, setLoadingQuiz] = useState(Boolean(quizId && usesNetlifyIdentity()));
 
   useEffect(() => {
     if (!usesNetlifyIdentity()) return;
@@ -1470,6 +1666,28 @@ function QuizBuilder({ onClose, onSave, initialCourseId }: { onClose: () => void
       if (options.length) setCourseOptions(options);
     }).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!quizId || !usesNetlifyIdentity()) return;
+    void fetch(`/.netlify/functions/lms-data?scope=quiz-admin&quizId=${encodeURIComponent(quizId)}`).then(async (response) => {
+      const data = await response.json() as { quiz?: Record<string, unknown>; questions?: Array<Record<string, unknown>>; error?: string };
+      if (!response.ok) throw new Error(data.error || "Chargement du QCM impossible");
+      const quiz = data.quiz;
+      if (!quiz) throw new Error("Questionnaire introuvable");
+      setTitle(String(quiz.title ?? "Évaluation finale")); setCourseId(String(quiz.course_id ?? initialCourseId ?? courses[0].id)); setThreshold(String(quiz.pass_threshold ?? 80));
+      const loaded = (data.questions ?? []).map((question): DraftQuizQuestion => {
+        const type = String(question.question_type ?? "single") as QuizQuestionType;
+        const options = parseQuizArray<string>(question.options).map(String);
+        const storedCorrect = parseQuizArray<number>(question.correct_answers).map(Number);
+        return {
+          type, prompt: String(question.prompt ?? ""), options: type === "true_false" ? ["Vrai", "Faux"] : type === "short_text" ? [] : options,
+          correctAnswers: type === "short_text" ? [] : storedCorrect.length ? storedCorrect : [Number(question.correct_option ?? 0)],
+          acceptedAnswers: parseQuizArray<string>(question.accepted_answers).map(String), explanation: String(question.explanation ?? ""), points: Number(question.points ?? 1),
+        };
+      });
+      setQuestions(loaded.length ? loaded : [emptyQuizQuestion()]);
+    }).catch((caught) => setError(caught instanceof Error ? caught.message : "Chargement du QCM impossible")).finally(() => setLoadingQuiz(false));
+  }, [initialCourseId, quizId]);
 
   const updateQuestion = (index: number, updates: Partial<DraftQuizQuestion>) => setQuestions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...updates } : item));
   const updateOption = (questionIndex: number, optionIndex: number, value: string) => updateQuestion(questionIndex, { options: questions[questionIndex].options.map((option, index) => index === optionIndex ? value : option) });
@@ -1501,8 +1719,9 @@ function QuizBuilder({ onClose, onSave, initialCourseId }: { onClose: () => void
     if (result.courseId) setCourseId(result.courseId);
     if (result.threshold !== undefined) setThreshold(String(result.threshold));
     if (result.questions.length) setQuestions(result.questions);
+    setImportedFileName(result.questions.length ? file.name : "");
     setImportErrors(result.errors);
-    setImportStatus(result.questions.length ? `${result.questions.length} question${result.questions.length > 1 ? "s" : ""} importée${result.questions.length > 1 ? "s" : ""} depuis ${file.name}.` : "Aucune question valide n’a été importée.");
+    setImportStatus(result.questions.length ? `${result.questions.length} question${result.questions.length > 1 ? "s" : ""} importée${result.questions.length > 1 ? "s" : ""} depuis ${file.name}. Vérifiez-les puis cliquez sur « Enregistrer dans la base ». ` : "Aucune question valide n’a été importée.");
   };
 
   const submit = async (event: FormEvent) => {
@@ -1513,24 +1732,26 @@ function QuizBuilder({ onClose, onSave, initialCourseId }: { onClose: () => void
     let savedQuiz = { id: `quiz-${Date.now()}`, title, questionCount: questions.length };
     if (usesNetlifyIdentity()) {
       try {
-        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create-quiz", courseId, title, threshold: Number(threshold), questions }) });
-        const data = await response.json() as { id?: string; questionCount?: number; error?: string };
+        const response = await fetch("/.netlify/functions/lms-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: quizId ? "update-quiz" : "create-quiz", quizId, courseId, title, threshold: Number(threshold), questions, importedFileName: importedFileName || null }) });
+        const data = await response.json() as { id?: string; questionCount?: number; persisted?: boolean; error?: string };
         if (!response.ok) throw new Error(data.error || "Enregistrement impossible");
+        if (!data.persisted) throw new Error("La base n’a pas confirmé l’enregistrement du QCM");
         savedQuiz = { id: data.id ?? savedQuiz.id, title, questionCount: data.questionCount ?? questions.length };
       } catch (caught) { setError(caught instanceof Error ? caught.message : "Enregistrement impossible"); setSavingQuiz(false); return; }
     }
     setSavingQuiz(false); onSave(savedQuiz);
   };
 
-  return <Modal title="Créer ou importer un QCM" onClose={onClose} wide studio><form className="quiz-builder modal-form advanced-quiz-builder" onSubmit={submit}>
-    <div className="form-grid quiz-settings-grid"><label>Titre du QCM<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Évaluation finale" required /></label><label>Formation<select value={courseId} onChange={(event) => setCourseId(event.target.value)}>{courseOptions.map((course) => <option value={course.id} key={course.id}>{course.code} · {course.title}</option>)}</select></label><label>Seuil de réussite<select value={threshold} onChange={(event) => setThreshold(event.target.value)}><option value="60">60 %</option><option value="70">70 %</option><option value="80">80 %</option><option value="90">90 %</option></select></label><label className="quiz-import">Importer JSON ou Excel<span><FileUp size={16} /> Sélectionner un fichier<input type="file" accept="application/json,.json,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} /></span></label></div>
+  return <Modal title={quizId ? "Modifier le QCM" : "Créer ou importer un QCM"} onClose={onClose} wide studio><form className="quiz-builder modal-form advanced-quiz-builder" onSubmit={submit}>
+    {loadingQuiz && <div className="studio-inline-empty"><Clock3 size={20} /><span>Chargement du questionnaire enregistré…</span></div>}
+    <div className="form-grid quiz-settings-grid"><label>Titre du QCM<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Évaluation finale" required /></label><label>Formation<select value={courseId} onChange={(event) => setCourseId(event.target.value)} disabled={Boolean(quizId)}>{courseOptions.map((course) => <option value={course.id} key={course.id}>{course.code} · {course.title}</option>)}</select></label><label>Seuil de réussite<select value={threshold} onChange={(event) => setThreshold(event.target.value)}><option value="60">60 %</option><option value="70">70 %</option><option value="80">80 %</option><option value="90">90 %</option></select></label><label className="quiz-import">Importer JSON ou Excel<span><FileUp size={16} /> {quizId ? "Remplacer depuis un fichier" : "Sélectionner un fichier"}<input type="file" accept="application/json,.json,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} /></span></label></div>
     <div className="quiz-template-links"><a href="/modeles/qcm-walyah-modele.xlsx" download><Table2 size={16} /> Télécharger le modèle Excel</a><a href="/modeles/qcm-walyah-exemple.json" download><FileText size={16} /> Télécharger le modèle JSON</a><span>100 questions maximum</span></div>
     {importStatus && <p className="import-status"><CheckCircle2 size={16} /> {importStatus}</p>}
     {importErrors.length > 0 && <div className="import-error-report" role="alert"><strong>{importErrors.length} anomalie{importErrors.length > 1 ? "s" : ""} détectée{importErrors.length > 1 ? "s" : ""}</strong><ul>{importErrors.slice(0, 12).map((message) => <li key={message}>{message}</li>)}</ul>{importErrors.length > 12 && <small>{importErrors.length - 12} autre(s) anomalie(s) non affichée(s).</small>}</div>}
     {error && <p className="form-message" role="alert">{error}</p>}
     <div className="builder-question-list">{questions.map((question, questionIndex) => <section className="builder-question advanced-question" key={questionIndex}><div className="builder-question-head"><span>Question {questionIndex + 1}</span><select aria-label={`Type de la question ${questionIndex + 1}`} value={question.type} onChange={(event) => changeType(questionIndex, event.target.value as QuizQuestionType)}>{(Object.keys(quizTypeLabels) as QuizQuestionType[]).map((type) => <option value={type} key={type}>{quizTypeLabels[type]}</option>)}</select><label className="question-points">Points<input type="number" min="1" max="10" value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} /></label>{questions.length > 1 && <button type="button" className="icon-button" aria-label="Supprimer la question" onClick={() => setQuestions(questions.filter((_, index) => index !== questionIndex))}><Trash2 size={15} /></button>}</div><label>Intitulé<textarea value={question.prompt} onChange={(event) => updateQuestion(questionIndex, { prompt: event.target.value })} placeholder="Saisissez votre question…" rows={2} required /></label>{question.type === "short_text" ? <label>Réponses acceptées — une par ligne<textarea rows={3} value={question.acceptedAnswers.join("\n")} onChange={(event) => updateQuestion(questionIndex, { acceptedAnswers: event.target.value.split(/\n|\|/).map((item) => item.trim()) })} placeholder="Ex. friction hydroalcoolique" required /></label> : <><div className="builder-options">{question.options.map((option, optionIndex) => <label key={optionIndex} className={question.correctAnswers.includes(optionIndex) ? "correct" : ""}><input type={question.type === "multiple" ? "checkbox" : "radio"} name={`correct-${questionIndex}`} checked={question.correctAnswers.includes(optionIndex)} onChange={() => toggleCorrect(questionIndex, optionIndex)} /><span>{String.fromCharCode(65 + optionIndex)}</span><input value={option} readOnly={question.type === "true_false"} onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)} placeholder={`Réponse ${optionIndex + 1}`} required />{question.type !== "true_false" && question.options.length > 2 && <button type="button" className="icon-button" aria-label="Retirer cette réponse" onClick={() => removeOption(questionIndex, optionIndex)}><X size={14} /></button>}</label>)}</div>{(question.type === "single" || question.type === "multiple") && question.options.length < 6 && <button type="button" className="text-button add-answer" onClick={() => updateQuestion(questionIndex, { options: [...question.options, ""] })}><Plus size={14} /> Ajouter une proposition</button>}</>}<label>Explication affichée après la réponse<textarea value={question.explanation} onChange={(event) => updateQuestion(questionIndex, { explanation: event.target.value })} placeholder="Expliquez pourquoi la réponse est correcte…" rows={2} /></label></section>)}</div>
     <button type="button" className="secondary-button add-question" disabled={questions.length >= 100} onClick={() => setQuestions([...questions, emptyQuizQuestion()])}><Plus size={16} /> Ajouter une question</button>
-    <footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={savingQuiz}><Save size={16} /> {savingQuiz ? "Enregistrement…" : `Enregistrer ${questions.length} question${questions.length > 1 ? "s" : ""}`}</button></footer>
+    <footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={savingQuiz || loadingQuiz}><Save size={16} /> {savingQuiz ? "Enregistrement dans la base…" : quizId ? `Enregistrer les modifications (${questions.length})` : `Enregistrer dans la base (${questions.length})`}</button></footer>
   </form></Modal>;
 }
 

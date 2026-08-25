@@ -147,7 +147,9 @@ export async function importQuizFile(file: File): Promise<QuizImportResult> {
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (extension === "json") {
     try {
-      const payload = JSON.parse(await file.text()) as Record<string, unknown>;
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const payload = Array.isArray(parsed) ? { questions: parsed } : parsed as Record<string, unknown>;
+      if (!payload || typeof payload !== "object") return { questions: [], errors: ["Le fichier JSON doit contenir un objet ou une liste de questions."] };
       return normalizePayload(payload, "Fichier JSON");
     } catch {
       return { questions: [], errors: ["Le fichier JSON est illisible ou mal formé."] };
