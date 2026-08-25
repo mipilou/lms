@@ -19,6 +19,7 @@ export type Course = {
   objective: string; audience: string; source: string; duration: string; modules: number;
   completedModules: number; progress: number; status: CourseStatus; mandatory?: boolean;
   accent: Accent; nextLesson: string; dueDate?: string; moduleContent: ModuleContent[];
+  quiz?: { id: string; title: string; threshold: number };
 };
 
 export type CatalogCourse = {
@@ -51,6 +52,7 @@ export const courses: Course[] = [
     objective: "Choisir la bonne technique d’hygiène des mains et l’appliquer au bon moment dans le parcours de soins.",
     audience: "Personnel soignant et équipes en contact avec les patients", source: "Catalogue CDL Academy 2026 complet",
     duration: "2 h 15", modules: 6, completedModules: 0, progress: 0, status: "À commencer", mandatory: true, accent: "teal", nextLesson: "Pourquoi l’hygiène des mains protège",
+    quiz: { id: "hygiene-mains-quiz", title: "Évaluation finale — Hygiène des mains", threshold: 80 },
     moduleContent: [
       courseModule("Pourquoi l’hygiène des mains protège", "video", "12 min", "Comprendre la chaîne de transmission et les risques associés aux soins.", ["Identifier les réservoirs", "Repérer les situations à risque", "Relier le geste à la sécurité patient"]),
       courseModule("Les 5 indications essentielles", "lesson", "20 min", "Décider quand réaliser une friction ou un lavage.", ["Avant le contact patient", "Avant un geste aseptique", "Après exposition et contact"]),

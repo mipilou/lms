@@ -7,17 +7,21 @@ Application de gestion de la formation conçue pour Walyah Académie : authentif
 - authentification e-mail/mot de passe avec confirmation, récupération et formulaire sécurisé de nouveau mot de passe ;
 - rôles serveur `learner`, `admin` et `super_admin` ;
 - création de chaque compte apprenant sans formation, certificat, score ni progression préchargés ;
+- annuaire RH synchronisé depuis le Passeport, avec recherche et création contrôlée des accès apprenants ;
+- auto-inscription publique désactivée dans l’interface au profit du processus RH → administrateur → apprenant ;
 - affectation progressive des parcours uniquement par un administrateur, un super-administrateur ou le Passeport ;
 - fiche complète de chaque apprenant accessible depuis le tableau de suivi ;
 - photo de profil modifiable par l’apprenant, stockée dans Netlify Blobs ;
-- tableaux de bord distincts pour l’administration opérationnelle et la super-administration ;
-- historique des assignations, modules, scores, certificats et connexions ;
-- 144 formations structurées issues des deux catalogues 2026 transmis ;
+- tableaux de bord distincts pour l’administration opérationnelle et la super-administration, avec sélecteur de prévisualisation super-admin/admin/apprenant ;
+- cockpit d’insights dynamique sur 7, 30 ou 90 jours : engagement, affectations, certifications et comparaison des services ;
+- journal intelligent des connexions et activités, classé par période et catégorie, filtrable, exportable et navigable par clic ;
+- 144 formations structurées issues des deux catalogues 2026 transmis, affichées par catégories ;
 - 6 parcours déjà scénarisés avec modules pédagogiques ;
 - studio guidé de préparation depuis le catalogue, modules réordonnables, liens vidéo/audio/web et dépôt segmenté compatible Netlify de PDF/DOCX/PPTX/MP4/WebM/audio/SCORM ;
 - stockage relationnel dans Netlify Database et fichiers dans Netlify Blobs ;
 - API HMAC bidirectionnelle pour le Passeport de formation ;
-- éditeur de questions à choix unique, choix multiples, vrai/faux et réponse courte, avec imports QCM JSON et Excel documentés dans `docs/FORMAT-QCM.md` ;
+- éditeur de questions à choix unique, choix multiples, vrai/faux et réponse courte, avec publication contrôlée et imports QCM JSON et Excel documentés dans `docs/FORMAT-QCM.md` ;
+- certificat nominatif automatique après validation complète des modules et évaluations, avec logo Walyah, numéro unique et impression/enregistrement PDF ;
 - interface responsive, recherche, filtres, exports CSV et journal d’activité.
 
 ## Déploiement
@@ -45,10 +49,10 @@ Les migrations SQL placées dans `netlify/database/migrations/` sont appliquées
 
 ## Architecture des données
 
-Les principales tables sont `users`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates`, `login_events`, `activity_events`, `training_requests`, `passport_connections`, `integration_events` et `role_audit_events`.
+Les principales tables sont `users`, `passport_employees`, `courses`, `modules`, `resources`, `enrollments`, `module_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates`, `login_events`, `activity_events`, `training_requests`, `passport_connections`, `integration_events` et `role_audit_events`.
 
 Les fichiers pédagogiques sont conservés dans le store Netlify Blobs `walyah-lms-content` et les photos de profil dans `walyah-lms-avatars`; la base conserve uniquement les métadonnées et les liens métier.
 
 ## Passeport de formation
 
-Le contrat d’échange, les événements et la signature HMAC sont décrits dans [`docs/PASSEPORT-INTEGRATION.md`](docs/PASSEPORT-INTEGRATION.md). La clé de rapprochement prioritaire est le `matricule`, avec l’e-mail comme solution de secours.
+Le contrat d’échange, les événements et la signature HMAC sont décrits dans [`docs/PASSEPORT-INTEGRATION.md`](docs/PASSEPORT-INTEGRATION.md). Le Passeport alimente d’abord un annuaire RH en attente ; l’administrateur choisit ensuite les personnes auxquelles créer un accès LMS. Le rapprochement privilégie l’identifiant externe, puis le matricule et enfin l’e-mail.

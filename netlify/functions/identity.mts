@@ -42,6 +42,11 @@ const identityHandlers = {
       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, role = EXCLUDED.role, last_login_at = NOW()
     `;
     await db.sql`
+      UPDATE passport_employees SET provisioning_status = 'active', activated_at = COALESCE(activated_at, NOW()),
+        last_error = NULL, updated_at = NOW()
+      WHERE lms_user_id = ${id}
+    `;
+    await db.sql`
       INSERT INTO login_events (id, user_id, email, event_type)
       VALUES (${eventId}, ${id}, ${email}, ${"login"})
     `;

@@ -10,11 +10,12 @@ La base est relationnelle et sépare l’identité, le contenu, le suivi pédago
 | Évaluation | `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates` | QCM, scores, réussite et attestations |
 | Pilotage | `login_events`, `activity_events` | connexions et chronologie métier |
 | Besoins | `training_requests` | demandes initiées par LMS, passeport ou import |
-| Passeport | `passport_connections`, `integration_events` | rapprochement des personnes et file d’événements bidirectionnelle |
+| Passeport | `passport_employees`, `passport_connections`, `integration_events` | annuaire RH en attente, rapprochement des comptes et file d’événements bidirectionnelle |
 
 ## Clés de référence
 
 - une personne est identifiée techniquement par `users.id` (identifiant Netlify Identity) ;
+- une fiche RH reçue du Passeport reste dans `passport_employees` tant que l’administrateur n’a pas créé ou rapproché son accès ;
 - le `matricule` est l’identifiant métier prioritaire et possède un index unique lorsqu’il est renseigné ;
 - l’e-mail est unique et sert de solution de rapprochement secondaire ;
 - chaque formation possède un `code` catalogue unique (`MED-01`, `CYB-001`, etc.) ;
@@ -25,7 +26,7 @@ La base est relationnelle et sépare l’identité, le contenu, le suivi pédago
 
 ## Principe de démarrage à vide
 
-La création d’un compte ajoute uniquement une ligne dans `users`. Elle ne crée jamais de ligne dans `enrollments`, `module_progress`, `quiz_attempts` ou `certificates`. Une formation n’apparaît chez l’apprenant qu’après une affectation explicite. La migration du 22 août 2026 retire aussi les anciennes affectations automatiques reconnaissables à l’absence de source, d’administrateur et de consigne.
+La réception d’un collaborateur crée d’abord une ligne `passport_employees`, jamais un compte. La création explicite de l’accès ajoute ou rapproche ensuite `users` et Netlify Identity. Elle ne crée aucune ligne dans `enrollments`, `module_progress`, `quiz_attempts` ou `certificates`. Une formation n’apparaît chez l’apprenant qu’après une affectation explicite. La migration du 22 août 2026 retire aussi les anciennes affectations automatiques reconnaissables à l’absence de source, d’administrateur et de consigne.
 
 ## Cycle d’une formation
 

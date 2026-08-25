@@ -17,6 +17,60 @@ function certificateNumber() {
   return `WAL-${stamp}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 }
 
+async function issueCompletionCertificate(
+  db: ReturnType<typeof getDatabase>,
+  userId: string,
+  courseId: string,
+  score: number | null,
+  quizAttemptId: string | null,
+) {
+  const [existing, identity] = await Promise.all([
+    db.sql<{ certificate_number: string; issued_at: string }>`SELECT certificate_number, issued_at FROM certificates WHERE user_id = ${userId} AND course_id = ${courseId} LIMIT 1`,
+    db.sql<Record<string, unknown>>`
+      SELECT u.full_name, u.email, u.matricule, u.department, u.job_title, u.location,
+             c.code, c.title, c.category, c.duration_minutes
+      FROM users u CROSS JOIN courses c
+      WHERE u.id = ${userId} AND c.id = ${courseId}
+      LIMIT 1
+    `,
+  ]);
+  if (!identity[0]) return null;
+  const number = existing[0]?.certificate_number ?? certificateNumber();
+  const metadata = JSON.stringify({
+    learnerName: identity[0].full_name,
+    learnerEmail: identity[0].email,
+    matricule: identity[0].matricule,
+    department: identity[0].department,
+    jobTitle: identity[0].job_title,
+    location: identity[0].location,
+    courseCode: identity[0].code,
+    courseTitle: identity[0].title,
+    category: identity[0].category,
+    durationMinutes: identity[0].duration_minutes,
+    issuer: "Walyah Académie",
+  });
+  const rows = await db.sql<{ certificate_number: string; issued_at: string }>`
+    INSERT INTO certificates (id, certificate_number, user_id, course_id, quiz_attempt_id, score, metadata)
+    VALUES (${crypto.randomUUID()}, ${number}, ${userId}, ${courseId}, ${quizAttemptId}, ${score}, ${metadata})
+    ON CONFLICT (user_id, course_id) DO UPDATE SET
+      quiz_attempt_id = COALESCE(EXCLUDED.quiz_attempt_id, certificates.quiz_attempt_id),
+      score = COALESCE(EXCLUDED.score, certificates.score), metadata = EXCLUDED.metadata
+    RETURNING certificate_number, issued_at
+  `;
+  await db.sql`
+    INSERT INTO integration_events (id, integration, direction, event_type, idempotency_key, subject_user_id, payload)
+    VALUES (${crypto.randomUUID()}, 'formation_passport', 'outbound', 'training.completed', ${`completion:${userId}:${courseId}`}, ${userId}, ${JSON.stringify({ courseId, score, passed: true, certificateNumber: number })})
+    ON CONFLICT (idempotency_key) DO NOTHING
+  `;
+  if (!existing[0]) {
+    await db.sql`
+      INSERT INTO activity_events (id, user_id, actor_id, event_type, entity_type, entity_id, summary, metadata)
+      VALUES (${crypto.randomUUID()}, ${userId}, ${userId}, 'certificate.issued', 'course', ${courseId}, 'Certificat de fin de formation délivré', ${JSON.stringify({ certificateNumber: number })})
+    `;
+  }
+  return rows[0] ?? { certificate_number: number, issued_at: new Date().toISOString() };
+}
+
 function normalizedAnswer(value: unknown) {
   return String(value ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
 }
@@ -52,6 +106,34 @@ const handler = async (request: Request) => {
 
     if (["admin", "catalog", "learner", "course-studio"].includes(scope) && !isStaff) {
       return json({ error: "Accès administrateur requis" }, 403);
+    }
+
+    if (scope === "quiz") {
+      const quizId = url.searchParams.get("quizId") ?? "";
+      if (!quizId) return json({ error: "quizId requis" }, 400);
+      const quizzes = isStaff
+        ? await db.sql<{ id: string; title: string; pass_threshold: number; course_id: string; course_title: string }>`
+            SELECT q.id, q.title, q.pass_threshold, q.course_id, c.title AS course_title
+            FROM quizzes q JOIN courses c ON c.id = q.course_id
+            WHERE q.id = ${quizId} AND q.published = TRUE
+            LIMIT 1
+          `
+        : await db.sql<{ id: string; title: string; pass_threshold: number; course_id: string; course_title: string }>`
+            SELECT q.id, q.title, q.pass_threshold, q.course_id, c.title AS course_title
+            FROM quizzes q
+            JOIN courses c ON c.id = q.course_id
+            JOIN enrollments e ON e.course_id = q.course_id AND e.user_id = ${user.id}
+            WHERE q.id = ${quizId} AND q.published = TRUE AND c.published = TRUE
+            LIMIT 1
+          `;
+      if (!quizzes[0]) return json({ error: "Évaluation introuvable ou non attribuée" }, 404);
+      const questions = await db.sql`
+        SELECT id, position, prompt, options, question_type, points
+        FROM quiz_questions
+        WHERE quiz_id = ${quizId}
+        ORDER BY position
+      `;
+      return json({ quiz: quizzes[0], questions });
     }
 
     if (scope === "course-studio") {
@@ -90,7 +172,13 @@ const handler = async (request: Request) => {
     }
 
     if (scope === "admin") {
-      const [totals, learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats, accounts, roleAudit] = await Promise.all([
+      const requestedPeriod = Number(url.searchParams.get("period") ?? 30);
+      const periodDays = [7, 30, 90].includes(requestedPeriod) ? requestedPeriod : 30;
+      const periodStart = new Date();
+      periodStart.setHours(0, 0, 0, 0);
+      periodStart.setDate(periodStart.getDate() - (periodDays - 1));
+      const periodSince = periodStart.toISOString();
+      const [totals, learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats, accounts, roleAudit, departmentStats] = await Promise.all([
         db.sql`
           SELECT
             (SELECT COUNT(*)::INT FROM users WHERE role = 'learner') AS learners,
@@ -105,6 +193,8 @@ const handler = async (request: Request) => {
             (SELECT COALESCE(ROUND(AVG(progress_percent)), 0)::INT FROM enrollments) AS completion_rate,
             (SELECT COUNT(*)::INT FROM users WHERE role = 'learner' AND (last_login_at IS NULL OR last_login_at < NOW() - INTERVAL '30 days')) AS inactive_users,
             (SELECT COUNT(DISTINCT user_id)::INT FROM login_events WHERE occurred_at >= NOW() - INTERVAL '7 days') AS active_users_7d,
+            (SELECT COUNT(DISTINCT user_id)::INT FROM login_events WHERE occurred_at >= ${periodSince}) AS active_users_period,
+            (SELECT COUNT(*)::INT FROM certificates WHERE issued_at >= ${periodSince}) AS certificates_period,
             (SELECT COUNT(*)::INT FROM users WHERE role = 'admin') AS admins,
             (SELECT COUNT(*)::INT FROM users WHERE role = 'super_admin') AS super_admins,
             (SELECT COUNT(*)::INT FROM passport_connections WHERE sync_status = 'connected') AS passport_connected,
@@ -125,24 +215,35 @@ const handler = async (request: Request) => {
           LIMIT 250
         `,
         db.sql`
-          SELECT email, event_type, occurred_at, metadata
-          FROM login_events
-          ORDER BY occurred_at DESC
-          LIMIT 75
+          SELECT l.id, l.user_id, l.email, l.event_type, l.occurred_at, l.metadata,
+                 u.full_name, u.matricule, u.department, u.job_title, u.status, u.last_login_at,
+                 COALESCE(u.profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar
+          FROM login_events l
+          LEFT JOIN users u ON u.id = l.user_id
+          WHERE l.occurred_at >= ${periodSince}
+          ORDER BY l.occurred_at DESC
+          LIMIT 250
         `,
         db.sql`
-          SELECT a.event_type, a.summary, a.occurred_at, u.full_name, u.email,
-                 CASE WHEN a.entity_type = 'course' THEN c.title ELSE NULL END AS entity_title
+          SELECT a.id, a.user_id, a.event_type, a.entity_type, a.entity_id, a.summary, a.occurred_at, a.metadata,
+                 u.full_name, u.email, u.matricule, u.department, u.job_title, u.status, u.last_login_at,
+                 COALESCE(u.profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar,
+                 COALESCE(c.title, linked_course.title) AS entity_title,
+                 COALESCE(c.id, linked_course.id) AS linked_course_id
           FROM activity_events a
           LEFT JOIN users u ON u.id = a.user_id
-          LEFT JOIN courses c ON c.id = a.entity_id
+          LEFT JOIN courses c ON a.entity_type = 'course' AND c.id = a.entity_id
+          LEFT JOIN modules m ON a.entity_type = 'module' AND m.id = a.entity_id
+          LEFT JOIN quizzes q ON a.entity_type = 'quiz' AND q.id = a.entity_id
+          LEFT JOIN courses linked_course ON linked_course.id = COALESCE(m.course_id, q.course_id)
+          WHERE a.occurred_at >= ${periodSince}
           ORDER BY a.occurred_at DESC
-          LIMIT 20
+          LIMIT 100
         `,
         db.sql`
           SELECT occurred_at::DATE AS day, COUNT(*)::INT AS count
           FROM login_events
-          WHERE occurred_at >= CURRENT_DATE - INTERVAL '6 days'
+          WHERE occurred_at >= ${periodSince}
           GROUP BY occurred_at::DATE
           ORDER BY day
         `,
@@ -171,7 +272,7 @@ const handler = async (request: Request) => {
           ORDER BY c.updated_at DESC, c.title
         `,
         db.sql`
-          SELECT q.id, q.title, q.pass_threshold, q.published, c.title AS course_title,
+          SELECT q.id, q.title, q.pass_threshold, q.published, c.id AS course_id, c.title AS course_title,
                  COUNT(DISTINCT qq.id)::INT AS question_count,
                  COUNT(DISTINCT qa.user_id)::INT AS participants,
                  COALESCE(ROUND(AVG(qa.score)), 0)::INT AS average_score
@@ -198,8 +299,21 @@ const handler = async (request: Request) => {
           ORDER BY r.occurred_at DESC
           LIMIT 30
         ` : Promise.resolve([]),
+        db.sql`
+          SELECT COALESCE(NULLIF(u.department, ''), 'Non renseigné') AS department,
+                 COUNT(DISTINCT u.id)::INT AS learners,
+                 COUNT(DISTINCT u.id) FILTER (WHERE u.last_login_at >= ${periodSince})::INT AS active_learners,
+                 COALESCE(ROUND(AVG(e.progress_percent)), 0)::INT AS average_progress,
+                 COUNT(e.id) FILTER (WHERE e.status = 'completed')::INT AS completed
+          FROM users u
+          LEFT JOIN enrollments e ON e.user_id = u.id
+          WHERE u.role = 'learner'
+          GROUP BY COALESCE(NULLIF(u.department, ''), 'Non renseigné')
+          ORDER BY learners DESC, average_progress DESC
+          LIMIT 10
+        `,
       ]);
-      return json({ totals: totals[0], learners: learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats, accounts, roleAudit, role: isSuperAdmin ? "super_admin" : "admin" });
+      return json({ totals: totals[0], learners: learnerRows, recentLogins, recentActivity, dailyLogins, courseStats, quizStats, accounts, roleAudit, departmentStats, periodDays, role: isSuperAdmin ? "super_admin" : "admin" });
     }
 
     if (scope === "catalog") {
@@ -252,6 +366,9 @@ const handler = async (request: Request) => {
                COALESCE(e.progress_percent, 0)::INT AS progress_percent,
                e.status AS enrollment_status,
                e.due_at,
+               (SELECT q.id FROM quizzes q WHERE q.course_id = c.id AND q.published = TRUE ORDER BY q.created_at LIMIT 1) AS quiz_id,
+               (SELECT q.title FROM quizzes q WHERE q.course_id = c.id AND q.published = TRUE ORDER BY q.created_at LIMIT 1) AS quiz_title,
+               (SELECT q.pass_threshold FROM quizzes q WHERE q.course_id = c.id AND q.published = TRUE ORDER BY q.created_at LIMIT 1) AS quiz_threshold,
                COALESCE((
                  SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
                    'id', m.id,
@@ -270,10 +387,11 @@ const handler = async (request: Request) => {
         WHERE c.published = TRUE
         ORDER BY c.mandatory DESC, e.due_at NULLS LAST, c.title
       `,
-      db.sql`SELECT full_name, email, department, job_title, COALESCE(profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar FROM users WHERE id = ${user.id} LIMIT 1`,
+      db.sql`SELECT full_name, email, matricule, department, job_title, location, COALESCE(profile_metadata ? 'avatar_storage_key', FALSE) AS has_avatar FROM users WHERE id = ${user.id} LIMIT 1`,
       db.sql`
         SELECT cert.certificate_number, cert.course_id, cert.score, cert.issued_at,
-               c.code AS course_code, c.title AS course_title
+               c.code AS course_code, c.title AS course_title, c.category AS course_category,
+               c.duration_minutes AS course_duration_minutes, cert.metadata
         FROM certificates cert JOIN courses c ON c.id = cert.course_id
         WHERE cert.user_id = ${user.id}
         ORDER BY cert.issued_at DESC
@@ -315,8 +433,23 @@ const handler = async (request: Request) => {
     await db.sql`
       UPDATE enrollments e SET
         progress_percent = p.percent,
-        status = CASE WHEN p.percent = 100 THEN 'completed' WHEN p.percent > 0 THEN 'in_progress' ELSE e.status END,
-        completed_at = CASE WHEN p.percent = 100 THEN NOW() ELSE e.completed_at END,
+        status = CASE
+          WHEN p.percent = 100 AND NOT EXISTS (
+            SELECT 1 FROM quizzes q
+            WHERE q.course_id = p.course_id AND q.published = TRUE
+              AND NOT EXISTS (SELECT 1 FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.user_id = ${user.id} AND qa.passed = TRUE)
+          ) THEN 'completed'
+          WHEN p.percent > 0 THEN 'in_progress'
+          ELSE e.status
+        END,
+        completed_at = CASE
+          WHEN p.percent = 100 AND NOT EXISTS (
+            SELECT 1 FROM quizzes q
+            WHERE q.course_id = p.course_id AND q.published = TRUE
+              AND NOT EXISTS (SELECT 1 FROM quiz_attempts qa WHERE qa.quiz_id = q.id AND qa.user_id = ${user.id} AND qa.passed = TRUE)
+          ) THEN COALESCE(e.completed_at, NOW())
+          ELSE e.completed_at
+        END,
         updated_at = NOW()
       FROM (
         SELECT m.course_id,
@@ -328,11 +461,26 @@ const handler = async (request: Request) => {
       ) p
       WHERE e.user_id = ${user.id} AND e.course_id = p.course_id
     `;
+    const completion = await db.sql<{ course_id: string; progress_percent: number; published_quizzes: number; passed_quizzes: number; certificate_score: number | null; certificate_attempt_id: string | null }>`
+      SELECT e.course_id, e.progress_percent,
+             (SELECT COUNT(*)::INT FROM quizzes q WHERE q.course_id = e.course_id AND q.published = TRUE) AS published_quizzes,
+             (SELECT COUNT(DISTINCT q.id)::INT FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id WHERE q.course_id = e.course_id AND q.published = TRUE AND qa.user_id = e.user_id AND qa.passed = TRUE) AS passed_quizzes,
+             (SELECT qa.score FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id WHERE q.course_id = e.course_id AND q.published = TRUE AND qa.user_id = e.user_id AND qa.passed = TRUE ORDER BY qa.submitted_at DESC LIMIT 1) AS certificate_score,
+             (SELECT qa.id FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id WHERE q.course_id = e.course_id AND q.published = TRUE AND qa.user_id = e.user_id AND qa.passed = TRUE ORDER BY qa.submitted_at DESC LIMIT 1) AS certificate_attempt_id
+      FROM enrollments e
+      JOIN modules m ON m.course_id = e.course_id
+      WHERE e.user_id = ${user.id} AND m.id = ${moduleId}
+      LIMIT 1
+    `;
+    const completedCourse = completion[0];
+    const certificate = completedCourse && Number(completedCourse.progress_percent) === 100 && Number(completedCourse.passed_quizzes) >= Number(completedCourse.published_quizzes)
+      ? await issueCompletionCertificate(db, user.id, completedCourse.course_id, completedCourse.certificate_score, completedCourse.certificate_attempt_id)
+      : null;
     await db.sql`
       INSERT INTO activity_events (id, user_id, actor_id, event_type, entity_type, entity_id, summary)
       VALUES (${crypto.randomUUID()}, ${user.id}, ${user.id}, 'module.completed', 'module', ${moduleId}, 'Module terminé')
     `;
-    return json({ ok: true });
+    return json({ ok: true, certificate });
   }
 
   if (action === "submit-quiz") {
@@ -378,17 +526,26 @@ const handler = async (request: Request) => {
       VALUES (${attemptId}, ${quizId}, ${user.id}, ${score}, ${JSON.stringify(answers)}, ${passed})
     `;
     if (passed) {
-      const number = certificateNumber();
-      await db.sql`
-        INSERT INTO certificates (id, certificate_number, user_id, course_id, quiz_attempt_id, score)
-        VALUES (${crypto.randomUUID()}, ${number}, ${user.id}, ${quiz[0].course_id}, ${attemptId}, ${score})
-        ON CONFLICT (user_id, course_id) DO UPDATE SET quiz_attempt_id = EXCLUDED.quiz_attempt_id, score = EXCLUDED.score, issued_at = NOW()
+      const validation = await db.sql<{ total_modules: number; completed_modules: number; published_quizzes: number; passed_quizzes: number }>`
+        SELECT
+          (SELECT COUNT(*)::INT FROM modules m WHERE m.course_id = ${quiz[0].course_id} AND m.published = TRUE) AS total_modules,
+          (SELECT COUNT(DISTINCT m.id)::INT FROM modules m JOIN module_progress mp ON mp.module_id = m.id WHERE m.course_id = ${quiz[0].course_id} AND m.published = TRUE AND mp.user_id = ${user.id} AND mp.completed = TRUE) AS completed_modules,
+          (SELECT COUNT(*)::INT FROM quizzes q WHERE q.course_id = ${quiz[0].course_id} AND q.published = TRUE) AS published_quizzes,
+          (SELECT COUNT(DISTINCT q.id)::INT FROM quizzes q JOIN quiz_attempts qa ON qa.quiz_id = q.id WHERE q.course_id = ${quiz[0].course_id} AND q.published = TRUE AND qa.user_id = ${user.id} AND qa.passed = TRUE) AS passed_quizzes
       `;
-      await db.sql`
-        INSERT INTO integration_events (id, integration, direction, event_type, idempotency_key, subject_user_id, payload)
-        VALUES (${crypto.randomUUID()}, 'formation_passport', 'outbound', 'training.completed', ${`completion:${user.id}:${quiz[0].course_id}`}, ${user.id}, ${JSON.stringify({ courseId: quiz[0].course_id, score, passed: true })})
-        ON CONFLICT (idempotency_key) DO UPDATE SET payload = EXCLUDED.payload, status = 'pending', attempts = 0, last_error = NULL
-      `;
+      const state = validation[0];
+      const courseValidated = Boolean(state)
+        && Number(state.completed_modules) >= Number(state.total_modules)
+        && Number(state.passed_quizzes) >= Number(state.published_quizzes);
+      if (courseValidated) {
+        await db.sql`
+          UPDATE enrollments SET status = 'completed', progress_percent = 100,
+            completed_at = COALESCE(completed_at, NOW()), updated_at = NOW()
+          WHERE user_id = ${user.id} AND course_id = ${quiz[0].course_id}
+        `;
+      }
+      const certificate = courseValidated ? await issueCompletionCertificate(db, user.id, quiz[0].course_id, score, attemptId) : null;
+      return json({ ok: true, passed, score, certificate });
     }
     return json({ ok: true, passed, score });
   }
@@ -512,6 +669,41 @@ const handler = async (request: Request) => {
       VALUES (${crypto.randomUUID()}, ${user.id}, 'course.published', 'course', ${courseId}, 'Formation publiée')
     `;
     return json({ ok: true });
+  }
+
+  if (action === "archive-course") {
+    const courseId = String(body.courseId ?? "");
+    if (!courseId) return json({ error: "Formation requise" }, 400);
+    const rows = await db.sql<{ id: string }>`SELECT id FROM courses WHERE id = ${courseId} AND lifecycle_status <> 'catalog' LIMIT 1`;
+    if (!rows[0]) return json({ error: "Formation introuvable" }, 404);
+    await db.sql`UPDATE courses SET published = FALSE, lifecycle_status = 'archived', updated_at = NOW() WHERE id = ${courseId}`;
+    await db.sql`
+      INSERT INTO activity_events (id, actor_id, event_type, entity_type, entity_id, summary)
+      VALUES (${crypto.randomUUID()}, ${user.id}, 'course.archived', 'course', ${courseId}, 'Formation archivée')
+    `;
+    return json({ ok: true });
+  }
+
+  if (action === "set-quiz-published") {
+    const quizId = String(body.quizId ?? "");
+    const published = Boolean(body.published);
+    if (!quizId) return json({ error: "Questionnaire requis" }, 400);
+    const rows = await db.sql<{ id: string; course_id: string; question_count: number }>`
+      SELECT q.id, q.course_id, COUNT(qq.id)::INT AS question_count
+      FROM quizzes q LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
+      WHERE q.id = ${quizId}
+      GROUP BY q.id
+      LIMIT 1
+    `;
+    if (!rows[0]) return json({ error: "Questionnaire introuvable" }, 404);
+    if (published && Number(rows[0].question_count) === 0) return json({ error: "Ajoutez au moins une question avant la publication" }, 409);
+    if (published) await db.sql`UPDATE quizzes SET published = FALSE WHERE course_id = ${rows[0].course_id} AND id <> ${quizId}`;
+    await db.sql`UPDATE quizzes SET published = ${published} WHERE id = ${quizId}`;
+    await db.sql`
+      INSERT INTO activity_events (id, actor_id, event_type, entity_type, entity_id, summary)
+      VALUES (${crypto.randomUUID()}, ${user.id}, ${published ? "quiz.published" : "quiz.unpublished"}, 'quiz', ${quizId}, ${published ? "QCM publié" : "QCM retiré de la publication"})
+    `;
+    return json({ ok: true, published });
   }
 
   if (action === "request-passport-sync") {

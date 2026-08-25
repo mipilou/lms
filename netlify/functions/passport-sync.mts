@@ -91,32 +91,106 @@ const handler = async (request: Request) => {
   const existing = await db.sql`SELECT id, status FROM integration_events WHERE idempotency_key = ${idempotencyKey} LIMIT 1`;
   if (existing[0]) return json(request, { ok: true, duplicate: true });
 
-  const matricule = data.matricule ? String(data.matricule) : null;
-  const email = data.email ? String(data.email).toLowerCase() : null;
+  const matricule = data.matricule ? String(data.matricule).trim() : null;
+  const email = data.email ? String(data.email).trim().toLowerCase() : null;
+  if (eventType === "employee.upsert") {
+    const externalEmployeeId = data.externalEmployeeId ? String(data.externalEmployeeId).trim() : null;
+    const fullName = String(data.fullName ?? email?.split("@")[0] ?? matricule ?? "Collaborateur").trim();
+    if (!fullName || (!externalEmployeeId && !matricule && !email)) return json(request, { error: "Nom et identifiant collaborateur requis" }, 400);
+    const requestedEmploymentStatus = String(data.employmentStatus ?? "active");
+    const employmentStatus = ["active", "inactive", "departed"].includes(requestedEmploymentStatus) ? requestedEmploymentStatus : "active";
+    const directoryMatches = await db.sql<{ id: string; lms_user_id: string | null }>`
+      SELECT id, lms_user_id
+      FROM passport_employees
+      WHERE external_employee_id = ${externalEmployeeId}
+         OR matricule = ${matricule}
+         OR LOWER(email) = ${email}
+      ORDER BY CASE
+        WHEN external_employee_id = ${externalEmployeeId} THEN 1
+        WHEN matricule = ${matricule} THEN 2
+        ELSE 3
+      END
+      LIMIT 3
+    `;
+    if (directoryMatches.length > 1) {
+      return json(request, { error: "Plusieurs fiches correspondent à ces identifiants. Corrigez le doublon dans l’annuaire avant de relancer la synchronisation." }, 409);
+    }
+    const existingDirectory = directoryMatches;
+    let directoryId = existingDirectory[0]?.id;
+    let linkedUserId = existingDirectory[0]?.lms_user_id ?? null;
+    if (directoryId) {
+      const updated = await db.sql<{ lms_user_id: string | null }>`
+        UPDATE passport_employees SET
+          external_employee_id = COALESCE(${externalEmployeeId}, external_employee_id),
+          matricule = COALESCE(${matricule}, matricule),
+          email = COALESCE(${email}, email),
+          full_name = ${fullName},
+          phone = COALESCE(${data.phone ? String(data.phone) : null}, phone),
+          department = COALESCE(${data.department ? String(data.department) : null}, department),
+          job_title = COALESCE(${data.jobTitle ? String(data.jobTitle) : null}, job_title),
+          manager_name = COALESCE(${data.managerName ? String(data.managerName) : null}, manager_name),
+          hire_date = COALESCE(${data.hireDate ? String(data.hireDate) : null}, hire_date),
+          location = COALESCE(${data.location ? String(data.location) : null}, location),
+          employment_status = ${employmentStatus},
+          provisioning_status = CASE
+            WHEN ${employmentStatus} <> 'active' THEN 'blocked'
+            WHEN lms_user_id IS NULL THEN 'pending'
+            WHEN activated_at IS NULL THEN 'invited'
+            ELSE 'active'
+          END,
+          source_updated_at = ${data.updatedAt ? String(data.updatedAt) : null},
+          last_synced_at = NOW(), last_error = NULL, metadata = ${JSON.stringify(data)}, updated_at = NOW()
+        WHERE id = ${directoryId}
+        RETURNING lms_user_id
+      `;
+      linkedUserId = updated[0]?.lms_user_id ?? linkedUserId;
+    } else {
+      directoryId = crypto.randomUUID();
+      await db.sql`
+        INSERT INTO passport_employees (
+          id, external_employee_id, matricule, email, full_name, phone, department, job_title,
+          manager_name, hire_date, location, employment_status, provisioning_status,
+          source_updated_at, last_synced_at, metadata
+        ) VALUES (
+          ${directoryId}, ${externalEmployeeId}, ${matricule}, ${email}, ${fullName},
+          ${data.phone ? String(data.phone) : null}, ${data.department ? String(data.department) : null},
+          ${data.jobTitle ? String(data.jobTitle) : null}, ${data.managerName ? String(data.managerName) : null},
+          ${data.hireDate ? String(data.hireDate) : null}, ${data.location ? String(data.location) : null},
+          ${employmentStatus}, ${employmentStatus === "active" ? "pending" : "blocked"},
+          ${data.updatedAt ? String(data.updatedAt) : null}, NOW(), ${JSON.stringify(data)}
+        )
+      `;
+    }
+
+    if (linkedUserId) {
+      await db.sql`
+        UPDATE users SET email = COALESCE(${email}, email), full_name = ${fullName},
+          matricule = COALESCE(${matricule}, matricule), phone = COALESCE(${data.phone ? String(data.phone) : null}, phone),
+          department = COALESCE(${data.department ? String(data.department) : null}, department),
+          job_title = COALESCE(${data.jobTitle ? String(data.jobTitle) : null}, job_title),
+          manager_name = COALESCE(${data.managerName ? String(data.managerName) : null}, manager_name),
+          hire_date = COALESCE(${data.hireDate ? String(data.hireDate) : null}, hire_date),
+          location = COALESCE(${data.location ? String(data.location) : null}, location),
+          status = CASE WHEN ${employmentStatus} <> 'active' THEN 'inactive' ELSE status END
+        WHERE id = ${linkedUserId}
+      `;
+    }
+
+    await db.sql`
+      INSERT INTO integration_events (id, integration, direction, event_type, idempotency_key, subject_user_id, payload, status, processed_at)
+      VALUES (${crypto.randomUUID()}, 'formation_passport', 'inbound', ${eventType}, ${idempotencyKey}, ${linkedUserId}, ${JSON.stringify(data)}, 'processed', NOW())
+    `;
+    await db.sql`
+      INSERT INTO activity_events (id, user_id, event_type, entity_type, entity_id, summary, metadata)
+      VALUES (${crypto.randomUUID()}, ${linkedUserId}, 'passport.employee.synced', 'passport_employee', ${directoryId}, 'Collaborateur synchronisé depuis le Passeport', ${JSON.stringify({ idempotencyKey, provisioningStatus: linkedUserId ? "linked" : "pending" })})
+    `;
+    return json(request, { ok: true, directoryId, userId: linkedUserId, provisioningStatus: linkedUserId ? "linked" : employmentStatus === "active" ? "pending" : "blocked" });
+  }
+
   const userRows = matricule
     ? await db.sql`SELECT id FROM users WHERE matricule = ${matricule} LIMIT 1`
     : email ? await db.sql`SELECT id FROM users WHERE LOWER(email) = ${email} LIMIT 1` : [];
-  let subjectUserId = userRows[0]?.id ? String(userRows[0].id) : null;
-
-  if (eventType === "employee.upsert") {
-    if (!email) return json(request, { error: "email requis pour employee.upsert" }, 400);
-    const fullName = String(data.fullName ?? email.split("@")[0]);
-    if (subjectUserId) {
-      await db.sql`
-        UPDATE users SET email = ${email}, full_name = ${fullName}, matricule = COALESCE(${matricule}, matricule), phone = COALESCE(${data.phone ? String(data.phone) : null}, phone), department = COALESCE(${data.department ? String(data.department) : null}, department), job_title = COALESCE(${data.jobTitle ? String(data.jobTitle) : null}, job_title), manager_name = COALESCE(${data.managerName ? String(data.managerName) : null}, manager_name), location = COALESCE(${data.location ? String(data.location) : null}, location)
-        WHERE id = ${subjectUserId}
-      `;
-    } else {
-      subjectUserId = crypto.randomUUID();
-      await db.sql`
-        INSERT INTO users (id, email, full_name, role, matricule, phone, department, job_title, manager_name, location)
-        VALUES (${subjectUserId}, ${email}, ${fullName}, 'learner', ${matricule}, ${data.phone ? String(data.phone) : null}, ${data.department ? String(data.department) : null}, ${data.jobTitle ? String(data.jobTitle) : null}, ${data.managerName ? String(data.managerName) : null}, ${data.location ? String(data.location) : null})
-        ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, matricule = COALESCE(EXCLUDED.matricule, users.matricule), phone = COALESCE(EXCLUDED.phone, users.phone), department = COALESCE(EXCLUDED.department, users.department), job_title = COALESCE(EXCLUDED.job_title, users.job_title), manager_name = COALESCE(EXCLUDED.manager_name, users.manager_name), location = COALESCE(EXCLUDED.location, users.location)
-      `;
-      const created = await db.sql`SELECT id FROM users WHERE LOWER(email) = ${email} LIMIT 1`;
-      subjectUserId = created[0]?.id ? String(created[0].id) : subjectUserId;
-    }
-  }
+  const subjectUserId = userRows[0]?.id ? String(userRows[0].id) : null;
 
   if (!subjectUserId) return json(request, { error: "Collaborateur introuvable : utilisez un matricule ou un e-mail connu" }, 404);
 
@@ -152,7 +226,7 @@ const handler = async (request: Request) => {
         ON CONFLICT (user_id, course_id) DO UPDATE SET score = EXCLUDED.score, issued_at = NOW(), metadata = EXCLUDED.metadata
       `;
     }
-  } else if (eventType !== "employee.upsert") {
+  } else {
     return json(request, { error: "Type d’événement non pris en charge" }, 400);
   }
 
