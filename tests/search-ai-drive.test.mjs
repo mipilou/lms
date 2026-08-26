@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
+
+test("Netlify database migration numbers are unique", async () => {
+  const files = (await readdir(new URL("netlify/database/migrations/", root))).filter((file) => file.endsWith(".sql"));
+  const numbers = files.map((file) => file.split("_")[0]);
+  assert.equal(new Set(numbers).size, numbers.length, `Duplicate migration number detected: ${files.join(", ")}`);
+});
 
 test("global search is controlled, keyboard accessible and navigable", async () => {
   const [app, api] = await Promise.all([read("app/lms-app.tsx"), read("netlify/functions/lms-data.mts")]);
@@ -36,7 +42,7 @@ test("Google Drive resources bypass binary upload while retaining strict links",
   const [picker, app, migration, docs] = await Promise.all([
     read("app/google-drive-picker.ts"),
     read("app/lms-app.tsx"),
-    read("netlify/database/migrations/20260825000100_ai_modules_google_drive.sql"),
+    read("netlify/database/migrations/20260825000200_ai_modules_google_drive.sql"),
     read("docs/GOOGLE-DRIVE.md"),
   ]);
   assert.match(picker, /drive\.file/);

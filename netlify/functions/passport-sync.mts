@@ -95,7 +95,11 @@ const handler = async (request: Request) => {
   const email = data.email ? String(data.email).trim().toLowerCase() : null;
   if (eventType === "employee.upsert") {
     const externalEmployeeId = data.externalEmployeeId ? String(data.externalEmployeeId).trim() : null;
-    const fullName = String(data.fullName ?? email?.split("@")[0] ?? matricule ?? "Collaborateur").trim();
+    const firstName = data.firstName ? String(data.firstName).trim() : null;
+    const lastName = data.lastName ? String(data.lastName).trim() : null;
+    const birthDate = data.birthDate ? String(data.birthDate).trim() : null;
+    const assembledName = [firstName, lastName].filter(Boolean).join(" ");
+    const fullName = String(data.fullName ?? (assembledName || email?.split("@")[0] || matricule || "Collaborateur")).trim();
     if (!fullName || (!externalEmployeeId && !matricule && !email)) return json(request, { error: "Nom et identifiant collaborateur requis" }, 400);
     const requestedEmploymentStatus = String(data.employmentStatus ?? "active");
     const employmentStatus = ["active", "inactive", "departed"].includes(requestedEmploymentStatus) ? requestedEmploymentStatus : "active";
@@ -125,6 +129,9 @@ const handler = async (request: Request) => {
           matricule = COALESCE(${matricule}, matricule),
           email = COALESCE(${email}, email),
           full_name = ${fullName},
+          first_name = COALESCE(${firstName}, first_name),
+          last_name = COALESCE(${lastName}, last_name),
+          birth_date = COALESCE(${birthDate}, birth_date),
           phone = COALESCE(${data.phone ? String(data.phone) : null}, phone),
           department = COALESCE(${data.department ? String(data.department) : null}, department),
           job_title = COALESCE(${data.jobTitle ? String(data.jobTitle) : null}, job_title),
@@ -138,7 +145,7 @@ const handler = async (request: Request) => {
             WHEN activated_at IS NULL THEN 'invited'
             ELSE 'active'
           END,
-          source_updated_at = ${data.updatedAt ? String(data.updatedAt) : null},
+          source_updated_at = ${data.updatedAt ? String(data.updatedAt) : null}, import_source = 'passport',
           last_synced_at = NOW(), last_error = NULL, metadata = ${JSON.stringify(data)}, updated_at = NOW()
         WHERE id = ${directoryId}
         RETURNING lms_user_id
@@ -148,16 +155,16 @@ const handler = async (request: Request) => {
       directoryId = crypto.randomUUID();
       await db.sql`
         INSERT INTO passport_employees (
-          id, external_employee_id, matricule, email, full_name, phone, department, job_title,
+          id, external_employee_id, matricule, email, full_name, first_name, last_name, birth_date, phone, department, job_title,
           manager_name, hire_date, location, employment_status, provisioning_status,
-          source_updated_at, last_synced_at, metadata
+          source_updated_at, last_synced_at, import_source, metadata
         ) VALUES (
-          ${directoryId}, ${externalEmployeeId}, ${matricule}, ${email}, ${fullName},
+          ${directoryId}, ${externalEmployeeId}, ${matricule}, ${email}, ${fullName}, ${firstName}, ${lastName}, ${birthDate},
           ${data.phone ? String(data.phone) : null}, ${data.department ? String(data.department) : null},
           ${data.jobTitle ? String(data.jobTitle) : null}, ${data.managerName ? String(data.managerName) : null},
           ${data.hireDate ? String(data.hireDate) : null}, ${data.location ? String(data.location) : null},
           ${employmentStatus}, ${employmentStatus === "active" ? "pending" : "blocked"},
-          ${data.updatedAt ? String(data.updatedAt) : null}, NOW(), ${JSON.stringify(data)}
+          ${data.updatedAt ? String(data.updatedAt) : null}, NOW(), 'passport', ${JSON.stringify(data)}
         )
       `;
     }
@@ -165,6 +172,8 @@ const handler = async (request: Request) => {
     if (linkedUserId) {
       await db.sql`
         UPDATE users SET email = COALESCE(${email}, email), full_name = ${fullName},
+          first_name = COALESCE(${firstName}, first_name), last_name = COALESCE(${lastName}, last_name),
+          birth_date = COALESCE(${birthDate}, birth_date),
           matricule = COALESCE(${matricule}, matricule), phone = COALESCE(${data.phone ? String(data.phone) : null}, phone),
           department = COALESCE(${data.department ? String(data.department) : null}, department),
           job_title = COALESCE(${data.jobTitle ? String(data.jobTitle) : null}, job_title),

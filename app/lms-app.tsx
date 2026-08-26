@@ -16,6 +16,7 @@ import {
 } from "./data";
 import { importAiModuleFile } from "./ai-module-import";
 import { googleDriveConfigured, pickGoogleDriveFile } from "./google-drive-picker";
+import { PEOPLE_IMPORT_COLUMNS, importPeopleExcelFile, parseCsvTable, parsePeopleTable, type PeopleImportResult, type PersonImportRow } from "./people-import";
 import { emptyQuizQuestion, importQuizFile, type DraftQuizQuestion, type QuizQuestionType } from "./quiz-import";
 
 export type Role = "learner" | "admin" | "super_admin";
@@ -1047,6 +1048,7 @@ function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
   const [status, setStatus] = useState("Tous");
   const [service, setService] = useState("Tous les services");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [invited, setInvited] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
@@ -1080,7 +1082,7 @@ function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
   };
   const renderLearnerRow = (learner: Learner) => <tr className="clickable-row" key={learner.id} onClick={() => onLearner(learner)}><td><button className="person-cell person-button"><UserAvatar name={learner.name} initials={learner.initials} src={learner.avatarUrl} /><span><strong>{learner.name}</strong><small>{learner.matricule} · {learner.email}</small></span></button></td><td>{learner.jobTitle}</td><td><span className="table-progress"><span><i style={{ width: `${learner.progress}%` }} /></span><strong>{learner.progress} %</strong></span></td><td><strong>{learner.completed}</strong> / {learner.assigned}</td><td><strong>{learner.lastLogin}</strong><small>{learner.lastLoginDetail}</small></td><td><span className={`status-tag status-${learner.status.toLowerCase().replace("à ", "").replace(" ", "-")}`}>{learner.status}</span></td><td><button className="icon-button" aria-label={`Ouvrir la fiche de ${learner.name}`} onClick={(event) => { event.stopPropagation(); onLearner(learner); }}><ChevronRight size={18} /></button></td></tr>;
   return <>
-    <section className="page-heading"><div><span className="eyebrow">Gestion des utilisateurs</span><h1>Apprenants par service</h1><p>Retrouvez chaque collaborateur dans sa rubrique métier et constituez des groupes de formation transverses.</p></div><div className="heading-actions"><button className="secondary-button" onClick={exportCsv}><Download size={17} /> Exporter le suivi</button><button className="secondary-button" onClick={() => setGroupsOpen(true)}><UsersRound size={17} /> Groupes de formation</button><button className="primary-button" onClick={() => setInviteOpen(true)}><UserPlus size={17} /> Créer un accès</button></div></section>
+    <section className="page-heading"><div><span className="eyebrow">Gestion des utilisateurs</span><h1>Apprenants par service</h1><p>Retrouvez chaque collaborateur dans sa rubrique métier et constituez des groupes de formation transverses.</p></div><div className="heading-actions"><button className="secondary-button" onClick={exportCsv}><Download size={17} /> Exporter le suivi</button><button className="secondary-button" onClick={() => setGroupsOpen(true)}><UsersRound size={17} /> Groupes de formation</button><button className="secondary-button" onClick={() => setImportOpen(true)}><FileUp size={17} /> Importer une liste</button><button className="primary-button" onClick={() => setInviteOpen(true)}><UserPlus size={17} /> Créer un accès</button></div></section>
     {invited.length > 0 && <div className="success-banner"><CheckCircle2 size={18} /> {invited.length} accès apprenant{invited.length > 1 ? "s" : ""} créé{invited.length > 1 ? "s" : ""} ou relié{invited.length > 1 ? "s" : ""} pendant cette session.</div>}
     {notice && <div className="success-banner" role="status"><CheckCircle2 size={18} /> {notice}</div>}
     {loadError && <div className="form-message" role="alert">{loadError}</div>}
@@ -1088,6 +1090,7 @@ function UsersView({ onLearner }: { onLearner: (learner: Learner) => void }) {
     <section className="panel table-panel"><div className="table-toolbar"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, matricule, e-mail, fonction…" /></label><select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous</option><option>Actif</option><option>À relancer</option><option>Inactif</option></select><span>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span></div></section>
     {serviceGroups.length ? <div className="learner-service-sections">{serviceGroups.map((group) => <section className="panel learner-service-section" key={group.department}><header><span className="service-section-icon"><UsersRound size={20} /></span><div><span className="eyebrow">Service</span><h2>{group.department}</h2></div><span className="count-badge">{group.learners.length} personne{group.learners.length > 1 ? "s" : ""}</span></header><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Apprenant</th><th>Fonction</th><th>Progression</th><th>Formations</th><th>Dernière connexion</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{group.learners.map(renderLearnerRow)}</tbody></table></div></section>)}</div> : <section className="panel table-empty service-empty">{loading ? <Clock3 size={22} /> : <UsersRound size={22} />}<strong>{loading ? "Chargement des apprenants…" : "Aucun apprenant dans cette rubrique"}</strong><span>{loading ? "Veuillez patienter." : "Modifiez les filtres ou créez un nouvel accès apprenant."}</span></section>}
     {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} onInvited={(email) => { setInvited([...invited, email]); setInviteOpen(false); }} />}
+    {importOpen && <PeopleImportModal onClose={() => setImportOpen(false)} onImported={(message) => { setNotice(message); setImportOpen(false); }} />}
     {groupsOpen && <TrainingGroupsModal learners={items} onClose={() => setGroupsOpen(false)} onChanged={(message) => setNotice(message)} />}
   </>;
 }
@@ -1242,6 +1245,99 @@ function AssignTrainingModal({ learner, onClose, onAssigned }: { learner: Learne
   return <Modal title={`Assigner une formation à ${learner.name}`} onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Parcours publié<select value={courseId} onChange={(event) => setCourseId(event.target.value)}>{courses.map((course) => <option value={course.id} key={course.id}>{course.code} · {course.title}</option>)}</select></label><label>Date limite<input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label><label>Consigne pour l’apprenant<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Objectif, contexte ou priorité…" /></label>{error && <p className="form-message" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={loading}><Send size={16} /> {loading ? "Assignation…" : "Assigner le parcours"}</button></footer></form></Modal>;
 }
 
+function PeopleImportModal({ onClose, onImported }: { onClose: () => void; onImported: (message: string) => void }) {
+  const [source, setSource] = useState<"excel" | "google_sheets">("excel");
+  const [preview, setPreview] = useState<PeopleImportResult | null>(null);
+  const [sourceReference, setSourceReference] = useState("");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const resetPreview = (nextSource: "excel" | "google_sheets") => {
+    setSource(nextSource); setPreview(null); setSourceReference(""); setError("");
+  };
+
+  const selectExcel = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setBusy(true); setError(""); setSourceReference(file.name);
+    const result = await importPeopleExcelFile(file);
+    setPreview(result); setBusy(false);
+  };
+
+  const pickPrivateSheet = async () => {
+    setBusy(true); setError(""); setPreview(null);
+    try {
+      const file = await pickGoogleDriveFile();
+      if (file.mimeType !== "application/vnd.google-apps.spreadsheet") throw new Error("Sélectionnez une feuille Google Sheets, pas un document ou un fichier Excel.");
+      if (!file.accessToken) throw new Error("L’autorisation Google Drive n’a pas été transmise.");
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}/export?mimeType=text%2Fcsv`, {
+        headers: { Authorization: `Bearer ${file.accessToken}`, Accept: "text/csv" },
+      });
+      if (!response.ok) throw new Error("Google Drive n’a pas pu exporter cette feuille. Vérifiez vos droits de lecture.");
+      if (Number(response.headers.get("content-length") ?? 0) > 3_000_000) throw new Error("Cette feuille dépasse la taille maximale autorisée (3 Mo).");
+      const csv = await response.text();
+      if (new TextEncoder().encode(csv).byteLength > 3_000_000) throw new Error("Cette feuille dépasse la taille maximale autorisée (3 Mo).");
+      setPreview(parsePeopleTable(parseCsvTable(csv)));
+      setSourceReference(file.url || file.name);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Sélection Google Sheets impossible"); }
+    finally { setBusy(false); }
+  };
+
+  const previewSheet = async () => {
+    setError(""); setPreview(null);
+    if (!sheetUrl.trim()) { setError("Collez d’abord l’adresse de votre feuille Google Sheets."); return; }
+    if (!usesNetlifyIdentity()) { setError("La lecture sécurisée de Google Sheets sera disponible sur votre domaine Netlify."); return; }
+    setBusy(true);
+    try {
+      const response = await fetch("/.netlify/functions/user-admin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview-google-sheet", url: sheetUrl.trim() }),
+      });
+      const data = await response.json() as PeopleImportResult & { error?: string };
+      if (!response.ok) throw new Error(data.error || "Lecture de la feuille impossible");
+      setPreview({ rows: data.rows ?? [], errors: data.errors ?? [], warnings: data.warnings ?? [] });
+      setSourceReference(sheetUrl.trim());
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Lecture de la feuille impossible"); }
+    finally { setBusy(false); }
+  };
+
+  const confirmImport = async () => {
+    if (!preview?.rows.length || preview.errors.length) return;
+    if (!usesNetlifyIdentity()) { setError("L’import en base sera disponible sur votre domaine Netlify."); return; }
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/.netlify/functions/user-admin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulk-import-people", source, sourceReference, rows: preview.rows }),
+      });
+      const data = await response.json() as { error?: string; imported?: number; created?: number; updated?: number; errors?: Array<{ rowNumber: number; message: string }> };
+      if (!response.ok) {
+        if (data.errors?.length) setPreview((current) => current ? { ...current, errors: data.errors ?? [] } : current);
+        throw new Error(data.error || "Import impossible");
+      }
+      const imported = data.imported ?? preview.rows.length;
+      onImported(`${imported} fiche${imported > 1 ? "s" : ""} ajoutée${imported > 1 ? "s" : ""} à l’annuaire RH · ${data.created ?? 0} nouvelle${(data.created ?? 0) > 1 ? "s" : ""}, ${data.updated ?? 0} mise${(data.updated ?? 0) > 1 ? "s" : ""} à jour. Aucun compte ni formation n’a été créé automatiquement.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Import impossible"); }
+    finally { setBusy(false); }
+  };
+
+  const renderPreviewRow = (row: PersonImportRow) => <tr key={`${row.matricule}-${row.rowNumber}`}><td><strong>{row.matricule}</strong></td><td>{row.lastName}</td><td>{row.firstName}</td><td>{formatDate(row.birthDate)}</td><td>{formatDate(row.hireDate)}</td><td>{row.jobTitle}</td><td>{row.department || "Non renseigné"}</td></tr>;
+  const canImport = Boolean(preview?.rows.length) && !preview?.errors.length && !busy;
+
+  return <Modal title="Importer une liste de collaborateurs" onClose={onClose} wide><div className="people-import-workspace">
+    <nav className="invite-source-tabs" aria-label="Source de la liste"><button className={source === "excel" ? "active" : ""} onClick={() => resetPreview("excel")}><FileUp size={16} /> Fichier Excel</button><button className={source === "google_sheets" ? "active" : ""} onClick={() => resetPreview("google_sheets")}><Table2 size={16} /> Google Sheets</button></nav>
+    <section className="people-import-body"><div className="people-import-intro"><div><span className="eyebrow">Annuaire RH</span><h3>Contrôlez la liste avant de l’enregistrer</h3><p>Chaque matricule est unique. Si une personne existe déjà, sa fiche est mise à jour au lieu d’être dupliquée.</p></div><a className="secondary-button" href="/modeles/import-personnes-walyah.xlsx" download><Download size={16} /> Modèle Excel</a></div>
+      <div className="import-column-guide"><strong>Colonnes attendues</strong><div>{PEOPLE_IMPORT_COLUMNS.map((column) => <span className={column.required ? "required" : "optional"} key={column.label}>{column.label}<small>{column.required ? "requis" : "facultatif"}</small></span>)}</div></div>
+      {source === "excel" ? <label className={`people-import-dropzone ${busy ? "busy" : ""}`}><UploadCloud size={28} /><span><strong>{busy ? "Analyse du classeur…" : sourceReference || "Déposez ou sélectionnez votre fichier XLSX"}</strong><small>Première feuille · 500 personnes maximum · dates JJ/MM/AAAA ou AAAA-MM-JJ</small></span><input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => void selectExcel(event)} disabled={busy} /></label> : <div className="google-sheet-import"><div className="google-sheet-picker"><div className="neutral-note"><Table2 size={18} /><span><strong>Feuille privée dans votre Drive</strong><small>Le sélecteur Google ouvre votre Drive et lit uniquement la feuille choisie. Le jeton d’accès reste dans votre navigateur.</small></span></div><button type="button" className="secondary-button" onClick={() => void pickPrivateSheet()} disabled={busy || !googleDriveConfigured()}><Table2 size={16} /> {googleDriveConfigured() ? "Choisir dans Google Drive" : "Google Drive non configuré"}</button></div><label>Ou coller le lien d’une feuille partagée<div><input type="url" value={sheetUrl} onChange={(event) => setSheetUrl(event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=0" /><button type="button" className="primary-button" onClick={() => void previewSheet()} disabled={busy}>{busy ? "Lecture…" : "Analyser le lien"}</button></div><small>Pour un lien : Partager → Toute personne disposant du lien → Lecteur.</small></label></div>}
+      {error && <p className="form-message" role="alert">{error}</p>}
+      {preview && <section className="people-import-preview"><header><span><strong>{preview.rows.length}</strong><small>lignes valides</small></span><span className={preview.errors.length ? "metric-error" : "metric-ok"}><strong>{preview.errors.length}</strong><small>erreurs</small></span><span className={preview.warnings.length ? "metric-warning" : "metric-ok"}><strong>{preview.warnings.length}</strong><small>avertissements</small></span></header>{preview.errors.length ? <div className="import-issue-list error-list"><strong>À corriger avant l’import</strong>{preview.errors.slice(0, 8).map((issue, index) => <span key={`${issue.rowNumber}-${index}`}><X size={14} /> {issue.rowNumber ? `Ligne ${issue.rowNumber} : ` : ""}{issue.message}</span>)}{preview.errors.length > 8 && <small>+ {preview.errors.length - 8} autres erreurs</small>}</div> : null}{preview.warnings.length ? <div className="import-issue-list warning-list"><strong>Informations à vérifier</strong>{preview.warnings.slice(0, 5).map((issue, index) => <span key={`${issue.rowNumber}-${index}`}><CircleHelp size={14} /> Ligne {issue.rowNumber} : {issue.message}</span>)}</div> : null}{preview.rows.length ? <div className="data-table-wrap import-preview-table"><table className="data-table"><thead><tr><th>Matricule</th><th>Nom</th><th>Prénom</th><th>Naissance</th><th>Entrée</th><th>Poste</th><th>Service</th></tr></thead><tbody>{preview.rows.slice(0, 8).map(renderPreviewRow)}</tbody></table>{preview.rows.length > 8 && <p>Prévisualisation des 8 premières lignes · {preview.rows.length - 8} autres personnes prêtes.</p>}</div> : null}</section>}
+      <footer className="people-import-actions"><span><ShieldCheck size={16} /> L’import crée des fiches RH en attente, jamais des comptes ou des affectations automatiques.</span><div><button className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" onClick={() => void confirmImport()} disabled={!canImport}><UploadCloud size={16} /> {busy ? "Enregistrement…" : `Importer ${preview?.rows.length || ""} personne${(preview?.rows.length ?? 0) > 1 ? "s" : ""}`}</button></div></footer>
+    </section>
+  </div></Modal>;
+}
+
 type PassportEmployee = {
   id: string;
   matricule: string;
@@ -1261,6 +1357,7 @@ function InviteModal({ onClose, onInvited }: { onClose: () => void; onInvited: (
   const [directoryQuery, setDirectoryQuery] = useState("");
   const [directoryLoading, setDirectoryLoading] = useState(() => usesNetlifyIdentity());
   const [creatingId, setCreatingId] = useState("");
+  const [emailDrafts, setEmailDrafts] = useState<Record<string, string>>({});
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("Accueil");
@@ -1295,10 +1392,12 @@ function InviteModal({ onClose, onInvited }: { onClose: () => void; onInvited: (
   const createFromPassport = async (employee: PassportEmployee) => {
     setError(""); setCreatingId(employee.id);
     try {
-      const response = await fetch("/.netlify/functions/user-admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "invite-passport-employee", directoryId: employee.id }) });
+      const accessEmail = employee.email || emailDrafts[employee.id] || "";
+      if (!accessEmail) throw new Error("Renseignez l’adresse e-mail professionnelle de cette personne.");
+      const response = await fetch("/.netlify/functions/user-admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "invite-passport-employee", directoryId: employee.id, email: accessEmail }) });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error || "Création de l’accès impossible");
-      onInvited(employee.email);
+      onInvited(accessEmail);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Création de l’accès impossible"); setCreatingId(""); }
   };
 
@@ -1318,7 +1417,11 @@ function InviteModal({ onClose, onInvited }: { onClose: () => void; onInvited: (
   const statusLabel = (status: string) => status === "pending" ? "À créer" : status === "invited" ? "Invitation envoyée" : status === "active" ? "Accès actif" : status === "blocked" ? "Inactif RH" : "À vérifier";
   return <Modal title="Créer un accès apprenant" onClose={onClose} wide><div className="invite-workspace">
     <nav className="invite-source-tabs" aria-label="Source du collaborateur"><button className={mode === "passport" ? "active" : ""} onClick={() => { setMode("passport"); setError(""); }}><Link2 size={16} /> Depuis le Passeport</button><button className={mode === "manual" ? "active" : ""} onClick={() => { setMode("manual"); setError(""); }}><Edit3 size={16} /> Saisie exceptionnelle</button></nav>
-    {mode === "passport" ? <section className="passport-directory"><div className="directory-heading"><div><span className="eyebrow">Annuaire RH synchronisé</span><h3>Sélectionnez un nouveau collaborateur</h3><p>Les informations viennent du Passeport. La création envoie seulement son accès LMS ; aucune formation n’est affectée automatiquement.</p></div><button className="secondary-button" onClick={() => void loadDirectory()} disabled={directoryLoading}><TrendingUp size={16} /> Actualiser</button></div><label className="directory-search"><Search size={17} /><input value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Nom, matricule, e-mail, service ou fonction…" /></label>{error && <p className="form-message" role="alert">{error}</p>}{directoryLoading ? <div className="directory-empty"><Clock3 size={23} /><strong>Synchronisation de l’annuaire…</strong></div> : filteredDirectory.length ? <div className="passport-employee-list">{filteredDirectory.map((employee) => { const canCreate = employee.employmentStatus === "active" && ["pending", "error"].includes(employee.provisioningStatus) && Boolean(employee.email); return <article key={employee.id} className={canCreate ? "candidate-ready" : ""}><UserAvatar name={employee.fullName} initials={initialsFrom(employee.fullName)} /><span className="employee-main"><strong>{employee.fullName}</strong><small>{employee.jobTitle} · {employee.department}</small><small>{employee.matricule}{employee.email ? ` · ${employee.email}` : " · e-mail manquant"}</small></span><span className={`status-tag ${employee.provisioningStatus === "active" ? "status-actif" : employee.provisioningStatus === "pending" ? "status-draft" : "status-relancer"}`}>{statusLabel(employee.provisioningStatus)}</span>{canCreate ? <button className="primary-button compact-action" onClick={() => void createFromPassport(employee)} disabled={Boolean(creatingId)}><UserPlus size={15} /> {creatingId === employee.id ? "Création…" : "Créer l’accès"}</button> : <button className="secondary-button compact-action" disabled>{employee.email ? statusLabel(employee.provisioningStatus) : "Compléter l’e-mail"}</button>}{employee.lastError && <small className="employee-error">{employee.lastError}</small>}</article>; })}</div> : <div className="directory-empty"><UsersRound size={24} /><strong>Aucun collaborateur trouvé</strong><span>Les nouvelles fiches créées par les RH dans le Passeport apparaîtront ici après synchronisation.</span></div>}<footer className="directory-footer"><span><ShieldCheck size={16} /> Rapprochement prioritaire par matricule, puis par e-mail.</span><button className="secondary-button" onClick={onClose}>Fermer</button></footer></section> : <form className="modal-form manual-invite-form" onSubmit={submit}><div className="neutral-note"><CircleHelp size={17} /><span><strong>Création exceptionnelle</strong><small>À utiliser uniquement si la personne n’existe pas encore dans le Passeport.</small></span></div><label>Nom complet<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nom et prénom" required /></label><label>Adresse e-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="prenom.nom@entreprise.com" required /></label><label>Service<select value={department} onChange={(event) => setDepartment(event.target.value)}><option>Accueil</option><option>Laboratoire</option><option>Imagerie</option><option>Optique</option><option>Administration</option><option>Maintenance</option></select></label><div className="neutral-note"><ShieldCheck size={17} /><span><strong>Compte créé sans formation</strong><small>Les parcours seront affectés progressivement depuis sa fiche.</small></span></div>{error && <p className="form-message" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={loading}><Send size={16} /> {loading ? "Envoi…" : "Créer et envoyer l’accès"}</button></footer></form>}
+    {mode === "passport" ? <section className="passport-directory"><div className="directory-heading"><div><span className="eyebrow">Annuaire RH synchronisé</span><h3>Sélectionnez un nouveau collaborateur</h3><p>Les informations viennent du Passeport, d’un fichier Excel ou de Google Sheets. La création envoie seulement son accès LMS ; aucune formation n’est affectée automatiquement.</p></div><button className="secondary-button" onClick={() => void loadDirectory()} disabled={directoryLoading}><TrendingUp size={16} /> Actualiser</button></div><label className="directory-search"><Search size={17} /><input value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Nom, matricule, e-mail, service ou fonction…" /></label>{error && <p className="form-message" role="alert">{error}</p>}{directoryLoading ? <div className="directory-empty"><Clock3 size={23} /><strong>Synchronisation de l’annuaire…</strong></div> : filteredDirectory.length ? <div className="passport-employee-list">{filteredDirectory.map((employee) => {
+      const canCreate = employee.employmentStatus === "active" && ["pending", "error"].includes(employee.provisioningStatus);
+      const accessEmail = employee.email || emailDrafts[employee.id] || "";
+      return <article key={employee.id} className={canCreate ? "candidate-ready" : ""}><UserAvatar name={employee.fullName} initials={initialsFrom(employee.fullName)} /><span className="employee-main"><strong>{employee.fullName}</strong><small>{employee.jobTitle} · {employee.department}</small><small>{employee.matricule}{employee.email ? ` · ${employee.email}` : " · e-mail à renseigner"}</small></span><span className={`status-tag ${employee.provisioningStatus === "active" ? "status-actif" : employee.provisioningStatus === "pending" ? "status-draft" : "status-relancer"}`}>{statusLabel(employee.provisioningStatus)}</span>{canCreate && employee.email ? <button className="primary-button compact-action" onClick={() => void createFromPassport(employee)} disabled={Boolean(creatingId)}><UserPlus size={15} /> {creatingId === employee.id ? "Création…" : "Créer l’accès"}</button> : canCreate ? <span className="employee-email-provision"><input type="email" value={accessEmail} onChange={(event) => setEmailDrafts((current) => ({ ...current, [employee.id]: event.target.value }))} placeholder="e-mail professionnel" aria-label={`E-mail de ${employee.fullName}`} /><button className="primary-button compact-action" onClick={() => void createFromPassport(employee)} disabled={Boolean(creatingId) || !accessEmail}><UserPlus size={15} /> {creatingId === employee.id ? "Création…" : "Créer l’accès"}</button></span> : <button className="secondary-button compact-action" disabled>{statusLabel(employee.provisioningStatus)}</button>}{employee.lastError && <small className="employee-error">{employee.lastError}</small>}</article>;
+    })}</div> : <div className="directory-empty"><UsersRound size={24} /><strong>Aucun collaborateur trouvé</strong><span>Importez une liste ou synchronisez le Passeport pour alimenter l’annuaire RH.</span></div>}<footer className="directory-footer"><span><ShieldCheck size={16} /> Rapprochement prioritaire par matricule, puis par e-mail.</span><button className="secondary-button" onClick={onClose}>Fermer</button></footer></section> : <form className="modal-form manual-invite-form" onSubmit={submit}><div className="neutral-note"><CircleHelp size={17} /><span><strong>Création exceptionnelle</strong><small>À utiliser uniquement si la personne n’existe pas encore dans l’annuaire RH.</small></span></div><label>Nom complet<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Nom et prénom" required /></label><label>Adresse e-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="prenom.nom@entreprise.com" required /></label><label>Service<select value={department} onChange={(event) => setDepartment(event.target.value)}><option>Accueil</option><option>Laboratoire</option><option>Imagerie</option><option>Optique</option><option>Administration</option><option>Maintenance</option></select></label><div className="neutral-note"><ShieldCheck size={17} /><span><strong>Compte créé sans formation</strong><small>Les parcours seront affectés progressivement depuis sa fiche.</small></span></div>{error && <p className="form-message" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button" type="submit" disabled={loading}><Send size={16} /> {loading ? "Envoi…" : "Créer et envoyer l’accès"}</button></footer></form>}
   </div></Modal>;
 }
 

@@ -3,6 +3,7 @@ export type DrivePickedFile = {
   name: string;
   url: string;
   mimeType: string;
+  accessToken?: string;
 };
 
 type GoogleTokenResponse = { access_token?: string; error?: string };
@@ -100,6 +101,7 @@ export async function pickGoogleDriveFile(): Promise<DrivePickedFile> {
           name: document.name || "Fichier Google Drive",
           url: document.url || `https://drive.google.com/open?id=${encodeURIComponent(document.id)}`,
           mimeType: document.mimeType || "application/octet-stream",
+          accessToken: token,
         });
       })
       .build();
